@@ -120,3 +120,29 @@
    97  echo "deb [signed-by=/etc/apt/keyrings/antigravity-repo-key.gpg] https://us-central1-apt.pkg.dev/projects/antigravity-auto-updater-dev/ antigravity-debian main" | sudo tee /etc/apt/sources.list.d/antigravity.list > /dev/null
    98  sudo apt update
 ```
+
+### GitHub CLI Installation & Setup
+```bash
+   75  sudo apt update && sudo apt install gh
+   77  gh repo create setup-usb-boot-keys --public --source=. --remote=origin --push
+  129  git --version && gh --version && cat /etc/os-release
+```
+
+### XFCE4 & VNC Desktop Setup
+```bash
+  116  sudo apt update && sudo apt install xfce4 xfce4-goodies -y
+  118  cat <<EOF > ~/.vnc/xstartup
+#!/bin/sh
+unset SESSION_MANAGER
+unset DBUS_SESSION_BUS_ADDRESS
+startxfce4 &
+EOF
+  126  chmod +x ~/.vnc/xstartup
+  128  vncserver :5 -geometry 1920x1080 -depth 24
+  155  vncserver -list
+```
+
+### Workspace Repository Setup
+```bash
+  151  mkdir -p ~/Documents && git clone https://github.com/alan-prudom/setup-usb-boot-keys ~/Documents/setup-usb
+```
