@@ -69,7 +69,32 @@ alan@192.168.1.34:/media/alan/home40 /home/alan/mnt/apelite fuse.sshfs x-systemd
 
 ---
 
-## 5. Summary of Current State
+---
+
+## 6. Resolving Duplicate Tailscale IDs (Cloned USB Keys)
+When cloning a Linux disk image/USB key, Tailscale and the system may share the same unique identifiers, causing IP conflicts on the VPN.
+
+### The Fix
+Run these commands on the **cloned** machine to force a new identity:
+
+#### A. Reset Tailscale State
+```bash
+sudo systemctl stop tailscaled
+sudo rm /var/lib/tailscale/tailscaled.state
+sudo systemctl start tailscaled
+sudo tailscale up --force-reauth
+```
+
+#### B. Reset System Machine ID (Recommended)
+```bash
+sudo rm -f /etc/machine-id /var/lib/dbus/machine-id
+sudo systemd-machine-id-setup
+```
+
+---
+
+## 7. Summary of Current State
 - **Local:** `/home/alan/mnt/apelite` is active.
 - **Remote:** `ap-elite` connected via SSHFS.
-- **Action:** Session documentation saved locally for future reference.
+- **GitHub:** Repository `setup-usb-boot-keys` created and pushed.
+- **Tailscale:** Troubleshooting guide for cloned keys added to logs.
