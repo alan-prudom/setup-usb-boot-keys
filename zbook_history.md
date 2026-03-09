@@ -146,3 +146,25 @@ EOF
 ```bash
   151  mkdir -p ~/Documents && git clone https://github.com/alan-prudom/setup-usb-boot-keys ~/Documents/setup-usb
 ```
+
+### Internal Drive Mounting (Read-Only)
+```bash
+  # Mount internal Windows and Data partitions
+  sudo mkdir -p /mnt/win_os /mnt/win_data
+  sudo mount -t ntfs-3g -o ro /dev/nvme0n1p3 /mnt/win_os
+  sudo mount -t ntfs-3g -o ro /dev/nvme0n1p4 /mnt/win_data
+```
+
+### SSHFS Permanent Setup (Fstab)
+```bash
+  # 1. Enable user_allow_other in /etc/fuse.conf
+  sudo sed -i 's/#user_allow_other/user_allow_other/' /etc/fuse.conf
+
+  # 2. Add entry to /etc/fstab for automount
+  # alan@192.168.1.34:/media/alan/home40 /home/alan/mnt/zbook fuse.sshfs x-systemd.automount,_netdev,user,idmap=user,follow_symlinks,identityfile=/home/alan/.ssh/id_rsa,allow_other,reconnect 0 0
+
+  # 3. Reload systemd and mount
+  sudo systemctl daemon-reload
+  sudo mount /home/alan/mnt/zbook
+```
+```
