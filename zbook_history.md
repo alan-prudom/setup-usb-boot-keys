@@ -166,5 +166,3 @@ EOF
   # 3. Reload systemd and mount
   sudo systemctl daemon-reload
   sudo mount /home/alan/mnt/zbook
-```
-```
