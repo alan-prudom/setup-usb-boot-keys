@@ -178,5 +178,26 @@ If you are running from a small partition (like a 20GB USB boot) or a partition 
    cd /var/tmp
    sudo -E bash ./casaos_install.sh
    ```
-   *(The `-E` flag ensures your `TMPDIR` variable is passed to the root installer.)*
+### Remote Access (VPN/Tailscale)
+Since this is a headless server, you should access the CasaOS dashboard via your VPN address to ensure security:
+- **Tailscale IP:** `http://100.67.12.83`
+- **Tailscale Name:** `http://alan-usb-g5` (If MagicDNS is enabled)
+
+---
+
+## 5. CasaOS Capabilities & Features
+
+CasaOS is a lightweight "Personal Cloud" layer that turns your Linux server into a touch-friendly, app-based dashboard. It is particularly powerful for iPad and mobile users.
+
+### Core Capabilities:
+*   **One-Click App Store:** Installs popular Docker-based apps like **Plex, Jellyfin, Nextcloud, Home Assistant, and AdGuard Home** with a single tap.
+*   **Docker Management:** A visual interface to start, stop, and monitor containers. You can also import custom `docker-compose.yml` files directly.
+*   **Unified File Manager:** A "what-you-see-is-what-you-get" web file explorer that allows you to drag-and-drop files between your iPad and the server.
+*   **Storage Monitoring:** Real-time visibility of CPU, RAM, and disk health across all connected drives (SATA and USB).
+*   **Network Sharing (SMB):** Built-in tools to share any folder on your server with other devices on your local network or VPN.
+*   **External Drive Mounting:** Easily mount external SMB or WebDAV shares from other servers and manage them in one place.
+*   **System Health Dashboard:** A clean overview of system uptime, network traffic, and hardware resource usage.
+
+### Why use CasaOS instead of a full Desktop?
+For headless servers, CasaOS is often superior to VNC/XFCE because it is **optimized for touch**. While VNC requires precise mouse cursor manipulation, CasaOS uses large icons and responsive web elements that feel native on an iPad Pro or tablet.
 
