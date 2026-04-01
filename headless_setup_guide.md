@@ -208,10 +208,31 @@ If your main system partition is small (e.g., a 20GB USB boot), installing many 
    }
    ```
 
+### Moving CasaOS App Data (/DATA):
+CasaOS stores app configurations and personal files in `/DATA`. To move this to your large partition:
+1. **Stop CasaOS and Move Data:**
+   ```bash
+   sudo systemctl stop casaos.service
+   sudo mkdir -p /mnt/win_data/CasaOS-Data
+   sudo rsync -aqxP /DATA/ /mnt/win_data/CasaOS-Data/
+   ```
+
+2. **Create Symlink:**
+   ```bash
+   sudo rm -rf /DATA
+   sudo ln -s /mnt/win_data/CasaOS-Data /DATA
+   ```
+
+3. **Restart:**
+   ```bash
+   sudo systemctl start casaos.service
+   ```
+
 4. **Restart and Verify:**
    ```bash
    sudo systemctl start docker.service
    sudo docker info | grep "Docker Root Dir"
+   ls -ld /DATA
    ```
 
 ---
