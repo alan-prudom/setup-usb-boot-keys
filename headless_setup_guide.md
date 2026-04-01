@@ -143,3 +143,40 @@ For automated services (or simple `git push`/`git pull` traffic) where the Devic
    cat ~/.ssh/id_ed25519.pub
    ```
 4. Manually copy the output text. Open your web browser on your local laptop, go to your GitHub/GitLab "SSH Keys" settings panel, and paste the key.
+
+---
+
+## 4. Installing CasaOS (Touch-Friendly Dashboard)
+
+CasaOS provides a visually appealing, "home-screen" style dashboard for your headless server. It is ideal for iPad users as it uses large touch-friendly icons for app management and file browsing.
+
+### Standard Installation
+If your system has plenty of free space on the root partition, run:
+```bash
+curl -fsSL https://get.casaos.io | sudo bash
+```
+
+### Troubleshooting: "No Space Left" or "Permission Denied"
+If you are running from a small partition (like a 20GB USB boot) or a partition with `noexec` restrictions (like some external mounts), follow these rescue steps:
+
+1. **Free Up Space:** Clear system logs and the package cache.
+   ```bash
+   sudo apt clean
+   sudo journalctl --vacuum-time=1d
+   ```
+
+2. **Redirect Temporary Files:** Use a larger partition (e.g., your mounted home drive) for the installer's extractions.
+   ```bash
+   mkdir -p /path/to/large/drive/tmp_installer
+   export TMPDIR=/path/to/large/drive/tmp_installer
+   ```
+
+3. **Bypass Noexec Restrictions:** Copy the installer to `/var/tmp` and run it from there to ensure it has script execution permissions.
+   ```bash
+   curl -fsSL https://get.casaos.io -o casaos_install.sh
+   cp casaos_install.sh /var/tmp/casaos_install.sh
+   cd /var/tmp
+   sudo -E bash ./casaos_install.sh
+   ```
+   *(The `-E` flag ensures your `TMPDIR` variable is passed to the root installer.)*
+
