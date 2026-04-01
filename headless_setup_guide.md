@@ -185,7 +185,38 @@ Since this is a headless server, you should access the CasaOS dashboard via your
 
 ---
 
-## 5. CasaOS Capabilities & Features
+## 5. Docker Storage Management (Moving App Data)
+If your main system partition is small (e.g., a 20GB USB boot), installing many CasaOS apps will quickly fill it up. To prevent this, you can move the Docker data-root to a larger partition.
+
+### How to Move Docker to a Larger Drive:
+1. **Prepare the Target:** Ensure your large partition is mounted as read-write.
+   ```bash
+   sudo mount -o remount,rw /mnt/win_data
+   sudo mkdir -p /mnt/win_data/docker-data
+   ```
+
+2. **Stop Docker and Sync Data:**
+   ```bash
+   sudo systemctl stop docker.service docker.socket
+   sudo rsync -aqxP /var/lib/docker/ /mnt/win_data/docker-data/
+   ```
+
+3. **Update Configuration:** Edit (or create) `/etc/docker/daemon.json` to point to the new path.
+   ```json
+   {
+     "data-root": "/mnt/win_data/docker-data"
+   }
+   ```
+
+4. **Restart and Verify:**
+   ```bash
+   sudo systemctl start docker.service
+   sudo docker info | grep "Docker Root Dir"
+   ```
+
+---
+
+## 6. CasaOS Capabilities & Features
 
 CasaOS is a lightweight "Personal Cloud" layer that turns your Linux server into a touch-friendly, app-based dashboard. It is particularly powerful for iPad and mobile users.
 
