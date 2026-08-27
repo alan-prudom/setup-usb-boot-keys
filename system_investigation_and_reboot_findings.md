@@ -100,6 +100,20 @@ To permanently prevent the return of `UNEXPECTED_STORE_EXCEPTION` and `KERNEL_DA
    ```cmd
    powercfg /h off
    ```
-3. **Offload Heavy Directories to `G:` (SD Card) or SMB Share (`\\192.168.1.34\home40`)**:
-   * Move browser download folders and staging directories off `C:`.
-   * Maintain at least **15–20 GB free space** on `C:` for steady-state Windows page filing.
+---
+
+## 6. Remote Connectivity & Service Daemon Endpoints (Audit 27 August 2026)
+
+### IP Addresses for Remote Access & AgentsView
+* **Local Subnet (Home / LAN)**: `192.168.1.159`
+* **Tailscale Mesh VPN**: `100.127.153.93`
+* **Local Machine / Host**: `127.0.0.1` (`localhost`)
+
+### OpenSSH Server Status
+* **Service Name**: `sshd` (OpenSSH SSH Server)
+* **Status**: **Running** (Startup Type: `Automatic`)
+* **Listening Endpoints**: Port 22 (`0.0.0.0:22` & `[::]:22`)
+* **SSH Direct Login**:
+  * Local LAN: `ssh alanp@192.168.1.159`
+  * Tailscale: `ssh alanp@100.127.153.93`
+
