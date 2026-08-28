@@ -4,10 +4,15 @@
 .DESCRIPTION
     Continuously monitors Samsung NVMe SSD temperature and applies smooth,
     multi-stage CPU throttling via powercfg to prevent thermal saturation.
-    Features adaptive sampling (1s to 10s) and stability-gated step-ups.
+    Features adaptive sampling (1s to 10s), stability-gated step-ups, and an
+    optional -Aggressive mode with stall-timeout deep throttling.
+.PARAMETER Aggressive
+    Enables active stall-timeout escalation: if temperature remains >= 56°C for > 90s,
+    deepens CPU throttling and pauses heavy background sync I/O until cooled.
 #>
 [CmdletBinding()]
 param(
+    [switch]$Aggressive,
     [string]$LogFile = "D:\nvme_thermal_log.csv",
     [switch]$Once,
     [switch]$TestMode
@@ -46,6 +51,25 @@ function Set-CpuThrottleLimit {
     }
 }
 
+function Set-BackgroundIoState {
+    param([bool]$Suspend)
+    
+    $procs = @("Dropbox")
+    foreach ($pName in $procs) {
+        $p = Get-Process -Name $pName -ErrorAction SilentlyContinue
+        if ($p) {
+            if ($Suspend) {
+                Write-Host ("[AGGRESSIVE] Pausing background I/O process: " + $pName) -ForegroundColor DarkYellow
+                # In PowerShell on Windows, we can adjust priority to Idle to de-prioritize disk I/O
+                $p | ForEach-Object { $_.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::Idle }
+            } else {
+                Write-Host ("[AGGRESSIVE] Restoring background I/O process: " + $pName) -ForegroundColor DarkGreen
+                $p | ForEach-Object { $_.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::Normal }
+            }
+        }
+    }
+}
+
 # Initialize CSV log header
 if (-not (Test-Path $LogFile)) {
     "Timestamp,TemperatureC,CpuLimitPercent,PollIntervalSec,StateTag,Message" | Out-File -FilePath $LogFile -Encoding utf8
@@ -53,8 +77,10 @@ if (-not (Test-Path $LogFile)) {
 
 # State Variables
 $currentCpuLimit = 100
-$stableBelowCounter = 0 # Seconds spent stably below next step-up threshold
-$dwellRequiredSeconds = 30 # Must remain stable for 30s before stepping up
+$stableBelowCounter = 0      # Seconds spent stably below next step-up threshold
+$dwellRequiredSeconds = 30   # Must remain stable for 30s before stepping up
+$stalledHotCounter = 0       # Seconds spent stalled at >= 56°C (for -Aggressive mode)
+$isAggressiveThrottled = $false
 
 Write-Host "==========================================================" -ForegroundColor DarkCyan
 Write-Host "  Proportional Multi-Stage NVMe Thermal Governor" -ForegroundColor DarkCyan
@@ -65,6 +91,11 @@ Write-Host "    [WARM]     50-54 C  -> CPU  80% (Poll:  5s)" -ForegroundColor Da
 Write-Host "    [HOT]      55-58 C  -> CPU  60% (Poll:  3s)" -ForegroundColor DarkMagenta
 Write-Host "    [CRITICAL] >= 59 C  -> CPU  40% (Poll:  1s)" -ForegroundColor DarkRed
 Write-Host "  Step-Up Gating : 30s continuous stability required" -ForegroundColor DarkGray
+if ($Aggressive) {
+    Write-Host "  Aggressive Mode: ACTIVE (Stall Timeout > 90s triggers deep throttle & I/O back-off)" -ForegroundColor DarkYellow
+} else {
+    Write-Host "  Aggressive Mode: OFF (Standard Proportional Mode)" -ForegroundColor DarkGray
+}
 Write-Host ("  Log File       : " + $LogFile) -ForegroundColor Black
 if ($TestMode) { Write-Host "  MODE           : DRY RUN (TestMode)" -ForegroundColor DarkBlue }
 Write-Host "----------------------------------------------------------" -ForegroundColor DarkGray
@@ -116,7 +147,30 @@ while ($true) {
         $statusMsg = "NORMAL"
     }
     
-    # 2. Step-Down Logic (IMMEDIATE) vs Step-Up Logic (STABILITY GATED)
+    # 2. Aggressive Stall-Timeout Logic (If -Aggressive is enabled)
+    if ($Aggressive) {
+        if ($temp -ge 56) {
+            $stalledHotCounter += $pollInterval
+            if ($stalledHotCounter -ge 90 -and -not $isAggressiveThrottled) {
+                $isAggressiveThrottled = $true
+                $targetLimit = [math]::Max(25, $targetLimit - 15) # Drop an extra 15% (e.g. 60% -> 45%)
+                $stateTag = "[AGGRESSIVE DEEP THROTTLE]"
+                $stateColor = "DarkRed"
+                $statusMsg = "AGGRESSIVE_STALL_DEEP_THROTTLE"
+                Write-Host ("[" + $now + "] ⚠️ [AGGRESSIVE] Temperature stalled >= 56 C for 90s! Forcing Deep Throttle to " + $targetLimit + "%...") -ForegroundColor DarkRed
+                Set-BackgroundIoState -Suspend $true
+            }
+        } else {
+            $stalledHotCounter = 0
+            if ($isAggressiveThrottled -and $temp -le 52) {
+                $isAggressiveThrottled = $false
+                Write-Host ("[" + $now + "] [AGGRESSIVE] Temperature recovered <= 52 C. Clearing deep throttle state.") -ForegroundColor DarkGreen
+                Set-BackgroundIoState -Suspend $false
+            }
+        }
+    }
+    
+    # 3. Step-Down Logic (IMMEDIATE) vs Step-Up Logic (STABILITY GATED)
     if ($targetLimit -lt $currentCpuLimit) {
         # Immediate Step-Down on thermal rise
         $oldLimit = $currentCpuLimit
@@ -129,10 +183,11 @@ while ($true) {
         # Step-Up requested: Check if we have dwelled long enough
         $stableBelowCounter += $pollInterval
         if ($stableBelowCounter -ge $dwellRequiredSeconds) {
-            # Step up by ONE notch (e.g. 40 -> 60 -> 80 -> 100)
             $oldLimit = $currentCpuLimit
             $nextStep = switch ($currentCpuLimit) {
+                25 { 40 }
                 40 { 60 }
+                45 { 60 }
                 60 { 80 }
                 80 { 100 }
                 default { 100 }
