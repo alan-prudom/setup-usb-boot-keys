@@ -1,17 +1,21 @@
 <#
 .SYNOPSIS
-    5% Adaptive Micro-Probe NVMe Proportional Thermal Governor (75% Hard Ceiling)
+    5% Adaptive Micro-Probe NVMe Proportional Thermal Governor with -MaxCpu Override
 .DESCRIPTION
     Continuously monitors Samsung NVMe SSD temperature and applies smooth,
-    5% micro-probe stepping via powercfg with an enforced 75% safety ceiling.
+    5% micro-probe stepping via powercfg with a configurable maximum ceiling (default 75%).
     Features 0s rollback on thermal rise, stability-gated +5% probing,
     and a 60s probe penalty timer to prevent hunting oscillations.
+.PARAMETER MaxCpu
+    Configures the absolute maximum CPU throttle percentage allowed (default 75, range 40-100).
 .PARAMETER Aggressive
     Enables active stall-timeout escalation: if temperature remains >= 56°C for > 90s,
     deepens CPU throttling and de-prioritizes background sync I/O.
 #>
 [CmdletBinding()]
 param(
+    [ValidateRange(40, 100)]
+    [int]$MaxCpu = 75,
     [switch]$Aggressive,
     [string]$LogFile = "D:\nvme_thermal_log.csv",
     [switch]$Once,
@@ -20,8 +24,8 @@ param(
 
 $ErrorActionPreference = "SilentlyContinue"
 
-# ABSOLUTE HARD SAFETY CEILING (Prevents 100% turbo boost voltage spikes during I/O)
-$globalMaxCeiling = 75
+# ABSOLUTE HARD SAFETY CEILING (Default 75%, or user override via -MaxCpu)
+$globalMaxCeiling = $MaxCpu
 
 function Get-NVMeTemperature {
     try {
@@ -83,7 +87,7 @@ if (-not (Test-Path $LogFile)) {
 }
 
 # State Variables
-$currentCpuLimit = 70        # Safe startup baseline
+$currentCpuLimit = [math]::Min(70, $globalMaxCeiling) # Safe startup baseline
 $stableBelowCounter = 0      # Seconds spent stably below next step-up threshold
 $dwellRequiredSeconds = 30   # Must remain stable for 30s before probing +5%
 $probePenaltyCounter = 0     # Cooldown timer after a rejected probe
@@ -91,15 +95,15 @@ $stalledHotCounter = 0       # Seconds spent stalled at >= 56°C (for -Aggressiv
 $isAggressiveThrottled = $false
 
 Write-Host "==========================================================" -ForegroundColor DarkCyan
-Write-Host "  5% Adaptive Micro-Probe NVMe Governor (75% Hard Cap)" -ForegroundColor DarkCyan
+Write-Host ("  5% Adaptive Micro-Probe NVMe Governor (" + $globalMaxCeiling + "% Max Ceiling)") -ForegroundColor DarkCyan
 Write-Host "==========================================================" -ForegroundColor DarkCyan
-Write-Host "  Proportional Micro-Stepping (5% Increments, Max 75%):" -ForegroundColor Black
-Write-Host "    [OPTIMAL]   <= 50 C  -> Probing up to 75%  (Poll: 5s)" -ForegroundColor DarkGreen
+Write-Host ("  Max CPU Ceiling: " + $globalMaxCeiling + "% " + $(if ($MaxCpu -eq 75) { "(Default Safe Cap)" } else { "(User Override Specified)" })) -ForegroundColor DarkGreen
+Write-Host "  Proportional Micro-Stepping (5% Increments):" -ForegroundColor Black
+Write-Host ("    [OPTIMAL]   <= 50 C  -> Probing up to " + $globalMaxCeiling + "%  (Poll: 5s)") -ForegroundColor DarkGreen
 Write-Host "    [SUSTAINED] 51-54 C  -> Target  65% - 70%  (Poll: 4s)" -ForegroundColor DarkYellow
 Write-Host "    [ACTIVE]    55-56 C  -> Step Down to  60%  (Poll: 3s)" -ForegroundColor DarkMagenta
 Write-Host "    [DEEP]      57-58 C  -> Step Down to  50%  (Poll: 2s)" -ForegroundColor DarkMagenta
 Write-Host "    [CRITICAL]  >= 59 C  -> Floor Limit   40%  (Poll: 1s)" -ForegroundColor DarkRed
-Write-Host "  Hard Safety Cap: CPU NEVER exceeds 75% (avoids I/O thermal spikes)" -ForegroundColor DarkGreen
 Write-Host "  Probe Gating   : 30s stable dwell + 60s rollback penalty memory" -ForegroundColor DarkGray
 if ($Aggressive) {
     Write-Host "  Aggressive Mode: ACTIVE (Stall Timeout > 90s triggers deep throttle & I/O back-off)" -ForegroundColor DarkYellow
@@ -183,14 +187,14 @@ while ($true) {
             $pollInterval = 5
             $stateTag = "[OPTIMAL " + $currentCpuLimit + "%]"
             $stateColor = "DarkGreen"
-            $maxProbeCeiling = 75 # Clamped to 75% max
+            $maxProbeCeiling = $globalMaxCeiling
         }
         else {
             # 51 - 54 C
             $pollInterval = 4
             $stateTag = "[SUSTAINED " + $currentCpuLimit + "%]"
             $stateColor = "DarkYellow"
-            $maxProbeCeiling = 70
+            $maxProbeCeiling = [math]::Min($globalMaxCeiling, 70)
         }
         
         # Check if we are above the target ceiling (e.g. at startup from 100%)
