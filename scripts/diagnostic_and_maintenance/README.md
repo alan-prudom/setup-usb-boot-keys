@@ -4,6 +4,11 @@ This directory contains PowerShell and batch diagnostic scripts generated during
 
 ## Script Catalog
 
+### Real-Time Protection & Hardware Safeguards
+| Script | Description |
+| :--- | :--- |
+| `nvme_thermal_watchdog.ps1` | Real-time watchdog daemon monitoring Samsung NVMe temperature. Automatically throttles CPU maximum state to 50% via `powercfg` when temp reaches 70Â°C, and restores 100% after cooling below 60Â°C. Logs temperature trends to `D:\nvme_thermal_log.csv`. |
+
 ### Crash Forensics & Hardware Diagnostics
 | Script | Description |
 | :--- | :--- |
@@ -31,3 +36,22 @@ This directory contains PowerShell and batch diagnostic scripts generated during
 | `migrate_syncthing_to_d.ps1` | Moves `C:\Sync` (Syncthing) to `D:\sync` and creates an NTFS junction. |
 | `migrate_google_drive_to_g.ps1` | Moves Google Drive cache from `C:` to SD Card (`G:`) and creates an NTFS junction. |
 | `archive_legacy_ubuntu16_rootfs.ps1` | Compresses `D:\Ubuntu16` (8.78 GB) into a `.tar.gz` archive, excluding dead WSL socket reparse points. |
+
+---
+
+## Running the NVMe Thermal Watchdog
+
+### Interactive Mode:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\diagnostic_and_maintenance\nvme_thermal_watchdog.ps1
+```
+
+### Background Daemon (Headless):
+```powershell
+Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File D:\Github\ap-devices-and-pcs\devices\setup-usb-boot-keys\scripts\diagnostic_and_maintenance\nvme_thermal_watchdog.ps1"
+```
+
+### Dry-Run Test:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\diagnostic_and_maintenance\nvme_thermal_watchdog.ps1 -Once -TestMode
+```
