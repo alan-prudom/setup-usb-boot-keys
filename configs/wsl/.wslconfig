@@ -1,0 +1,18 @@
+﻿# Global WSL2 & Docker Desktop Resource Configuration
+# Managed in version control: devices/setup-usb-boot-keys/configs/wsl/.wslconfig
+
+[wsl2]
+# Limits VM memory allocated to WSL2/Docker to 4GB (leaving 12GB free for Windows host)
+memory=4GB
+
+# Assigns 4 virtual processors (matching 4 physical cores of i7-8550U)
+processors=4
+
+# Caps swap space size to 2GB to minimize NVMe write churn
+swap=2GB
+
+# Disables GUI applications in WSL if not needed (reduces overhead)
+guiApplications=false
+
+# Automatically reclaims unused memory allocated to WSL2 virtual machine
+autoMemoryReclaim=gradual
