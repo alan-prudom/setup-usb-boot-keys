@@ -1,9 +1,9 @@
 [CmdletBinding()]
 param(
-    [int]$IntervalSeconds = 20,
-    [int]$WarningTemp = 65,
-    [int]$CriticalTemp = 70,
-    [int]$RecoveryTemp = 60,
+    [int]$IntervalSeconds = 15,
+    [int]$WarningTemp = 58,
+    [int]$CriticalTemp = 62,
+    [int]$RecoveryTemp = 55,
     [string]$LogFile = "D:\nvme_thermal_log.csv",
     [switch]$Once,
     [switch]$TestMode
