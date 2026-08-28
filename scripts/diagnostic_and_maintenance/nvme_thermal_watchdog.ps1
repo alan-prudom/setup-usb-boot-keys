@@ -1,14 +1,13 @@
 <#
 .SYNOPSIS
-    10% Fine-Grained Proportional NVMe Thermal Governor & Adaptive Watchdog
+    5% Adaptive Micro-Probe NVMe Proportional Thermal Governor
 .DESCRIPTION
-    Continuously monitors Samsung NVMe SSD temperature and applies smooth
-    10% micro-step CPU throttling via powercfg to prevent thermal saturation.
-    Features adaptive sampling (1s to 10s), stability-gated +10% step-ups,
-    and an optional -Aggressive mode with stall-timeout deep throttling.
+    Continuously monitors Samsung NVMe SSD temperature and applies smooth,
+    5% micro-probe stepping via powercfg. Features 0s rollback on thermal rise,
+    stability-gated +5% probing, and a 60s probe penalty timer to prevent hunting.
 .PARAMETER Aggressive
     Enables active stall-timeout escalation: if temperature remains >= 56°C for > 90s,
-    deepens CPU throttling and pauses heavy background sync I/O until cooled.
+    deepens CPU throttling and de-prioritizes background sync I/O.
 #>
 [CmdletBinding()]
 param(
@@ -75,112 +74,154 @@ if (-not (Test-Path $LogFile)) {
 }
 
 # State Variables
-$currentCpuLimit = 100
+$currentCpuLimit = 70        # Safe default startup baseline
 $stableBelowCounter = 0      # Seconds spent stably below next step-up threshold
-$dwellRequiredSeconds = 25   # Must remain stable for 25s before stepping up +10%
+$dwellRequiredSeconds = 30   # Must remain stable for 30s before probing +5%
+$probePenaltyCounter = 0     # Cooldown timer after a rejected probe
 $stalledHotCounter = 0       # Seconds spent stalled at >= 56°C (for -Aggressive mode)
 $isAggressiveThrottled = $false
 
 Write-Host "==========================================================" -ForegroundColor DarkCyan
-Write-Host "  10% Fine-Grained NVMe Proportional Thermal Governor" -ForegroundColor DarkCyan
+Write-Host "  5% Adaptive Micro-Probe NVMe Proportional Governor" -ForegroundColor DarkCyan
 Write-Host "==========================================================" -ForegroundColor DarkCyan
-Write-Host "  10% Micro-Stepping Ladder:" -ForegroundColor Black
-Write-Host "    [NORMAL]    <= 46 C  -> CPU 100% (Poll: 10s)" -ForegroundColor DarkGreen
-Write-Host "    [TIER 90]   47-49 C  -> CPU  90% (Poll:  8s)" -ForegroundColor DarkGreen
-Write-Host "    [TIER 80]   50-52 C  -> CPU  80% (Poll:  5s)" -ForegroundColor DarkYellow
-Write-Host "    [TIER 70]   53-54 C  -> CPU  70% (Poll:  4s)" -ForegroundColor DarkYellow
-Write-Host "    [TIER 60]   55-56 C  -> CPU  60% (Poll:  3s)" -ForegroundColor DarkMagenta
-Write-Host "    [TIER 50]   57-58 C  -> CPU  50% (Poll:  2s)" -ForegroundColor DarkMagenta
-Write-Host "    [CRITICAL]  >= 59 C  -> CPU  40% (Poll:  1s)" -ForegroundColor DarkRed
-Write-Host "  Step-Up Gating : 25s continuous stability for each +10% step" -ForegroundColor DarkGray
+Write-Host "  Proportional Micro-Stepping (5% Increments):" -ForegroundColor Black
+Write-Host "    [NORMAL]    <= 46 C  -> Probing up to 100% (Poll: 8s)" -ForegroundColor DarkGreen
+Write-Host "    [OPTIMAL]   47-52 C  -> Probing 75% - 90%  (Poll: 5s)" -ForegroundColor DarkGreen
+Write-Host "    [SUSTAINED] 53-54 C  -> Target  65% - 70%  (Poll: 4s)" -ForegroundColor DarkYellow
+Write-Host "    [ACTIVE]    55-56 C  -> Step Down to  60%  (Poll: 3s)" -ForegroundColor DarkMagenta
+Write-Host "    [DEEP]      57-58 C  -> Step Down to  50%  (Poll: 2s)" -ForegroundColor DarkMagenta
+Write-Host "    [CRITICAL]  >= 59 C  -> Floor Limit   40%  (Poll: 1s)" -ForegroundColor DarkRed
+Write-Host "  Probe Gating   : 30s stable dwell + 60s rollback penalty memory" -ForegroundColor DarkGray
 if ($Aggressive) {
     Write-Host "  Aggressive Mode: ACTIVE (Stall Timeout > 90s triggers deep throttle & I/O back-off)" -ForegroundColor DarkYellow
 } else {
-    Write-Host "  Aggressive Mode: OFF (Standard 10% Proportional Mode)" -ForegroundColor DarkGray
+    Write-Host "  Aggressive Mode: OFF (Standard 5% Adaptive Mode)" -ForegroundColor DarkGray
 }
 Write-Host ("  Log File       : " + $LogFile) -ForegroundColor Black
 if ($TestMode) { Write-Host "  MODE           : DRY RUN (TestMode)" -ForegroundColor DarkBlue }
 Write-Host "----------------------------------------------------------" -ForegroundColor DarkGray
+
+# Set initial safe baseline
+Set-CpuThrottleLimit -Percent $currentCpuLimit
 
 while ($true) {
     $now = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
     $temp = Get-NVMeTemperature
     
     if ($null -eq $temp) {
-        Write-Host ("[" + $now + "] [ERROR] Unable to read NVMe temperature. Retrying in 5s...") -ForegroundColor DarkYellow
+        Write-Host ("[" + $now + "] [ERROR] Unable to read NVMe temperature. Retrying in 4s...") -ForegroundColor DarkYellow
         if ($Once) { break }
-        Start-Sleep -Seconds 5
+        Start-Sleep -Seconds 4
         continue
     }
     
-    # 1. Determine Target Tier & Adaptive Poll Interval (10% Fine Grained)
-    $targetLimit = 100
-    $pollInterval = 10
-    $stateTag = "[NORMAL 100%]"
-    $stateColor = "DarkGreen"
-    $statusMsg = "Normal"
+    # Decrement probe penalty counter if active
+    if ($probePenaltyCounter -gt 0) {
+        $probePenaltyCounter = [math]::Max(0, $probePenaltyCounter - 4)
+    }
+    
+    # 1. Determine Ceiling & Polling Rate from Live Temperature
+    $pollInterval = 4
+    $stateTag = "[SUSTAINED " + $currentCpuLimit + "%]"
+    $stateColor = "DarkYellow"
+    $statusMsg = "Sustained"
     
     if ($temp -ge 59) {
-        $targetLimit = 40
         $pollInterval = 1
         $stateTag = "[CRITICAL 40%]"
         $stateColor = "DarkRed"
-        $statusMsg = "CRITICAL_THROTTLING"
+        $statusMsg = "CRITICAL_FLOOR"
+        if ($currentCpuLimit -gt 40) {
+            $oldLimit = $currentCpuLimit
+            $currentCpuLimit = 40
+            $probePenaltyCounter = 90
+            $stableBelowCounter = 0
+            Write-Host ("[" + $now + "] " + $stateTag + " NVMe is " + $temp + " C (>= 59 C)! EMERGENCY FLOOR: " + $oldLimit + "% -> 40%") -ForegroundColor DarkRed
+            Set-CpuThrottleLimit -Percent 40
+        }
     }
     elseif ($temp -ge 57) {
-        $targetLimit = 50
         $pollInterval = 2
-        $stateTag = "[TIER 50%]"
+        $stateTag = "[DEEP 50%]"
         $stateColor = "DarkMagenta"
-        $statusMsg = "TIER_50_COOLING"
+        $statusMsg = "DEEP_COOLING"
+        if ($currentCpuLimit -gt 50) {
+            $oldLimit = $currentCpuLimit
+            $currentCpuLimit = 50
+            $probePenaltyCounter = 60
+            $stableBelowCounter = 0
+            Write-Host ("[" + $now + "] " + $stateTag + " NVMe is " + $temp + " C! Rolling back CPU: " + $oldLimit + "% -> 50%") -ForegroundColor DarkMagenta
+            Set-CpuThrottleLimit -Percent 50
+        }
     }
     elseif ($temp -ge 55) {
-        $targetLimit = 60
         $pollInterval = 3
-        $stateTag = "[TIER 60%]"
+        $stateTag = "[ACTIVE 60%]"
         $stateColor = "DarkMagenta"
-        $statusMsg = "TIER_60_COOLING"
-    }
-    elseif ($temp -ge 53) {
-        $targetLimit = 70
-        $pollInterval = 4
-        $stateTag = "[TIER 70%]"
-        $stateColor = "DarkYellow"
-        $statusMsg = "TIER_70_SUSTAINED"
-    }
-    elseif ($temp -ge 50) {
-        $targetLimit = 80
-        $pollInterval = 5
-        $stateTag = "[TIER 80%]"
-        $stateColor = "DarkYellow"
-        $statusMsg = "TIER_80_WARM"
-    }
-    elseif ($temp -ge 47) {
-        $targetLimit = 90
-        $pollInterval = 8
-        $stateTag = "[TIER 90%]"
-        $stateColor = "DarkGreen"
-        $statusMsg = "TIER_90_HIGH"
+        $statusMsg = "ACTIVE_COOLING"
+        if ($currentCpuLimit -gt 60) {
+            $oldLimit = $currentCpuLimit
+            $currentCpuLimit = 60
+            $probePenaltyCounter = 60
+            $stableBelowCounter = 0
+            Write-Host ("[" + $now + "] " + $stateTag + " NVMe reached " + $temp + " C! Instant Rollback: " + $oldLimit + "% -> 60% (60s probe penalty active)") -ForegroundColor DarkMagenta
+            Set-CpuThrottleLimit -Percent 60
+        }
     }
     else {
-        $targetLimit = 100
-        $pollInterval = 10
-        $stateTag = "[NORMAL 100%]"
-        $stateColor = "DarkGreen"
-        $statusMsg = "NORMAL"
+        # Temperature is <= 54 C (Safe Probing Zone)
+        if ($temp -le 46) {
+            $pollInterval = 8
+            $stateTag = "[NORMAL " + $currentCpuLimit + "%]"
+            $stateColor = "DarkGreen"
+            $maxProbeCeiling = 100
+        }
+        elseif ($temp -le 50) {
+            $pollInterval = 6
+            $stateTag = "[OPTIMAL " + $currentCpuLimit + "%]"
+            $stateColor = "DarkGreen"
+            $maxProbeCeiling = 90
+        }
+        else {
+            # 51 - 54 C
+            $pollInterval = 4
+            $stateTag = "[SUSTAINED " + $currentCpuLimit + "%]"
+            $stateColor = "DarkYellow"
+            $maxProbeCeiling = 75 # Probes up to 75% in this zone
+        }
+        
+        # Check if we can probe +5% higher
+        if ($currentCpuLimit -lt $maxProbeCeiling -and $probePenaltyCounter -eq 0) {
+            $stableBelowCounter += $pollInterval
+            if ($stableBelowCounter -ge $dwellRequiredSeconds) {
+                # Probe +5% Step
+                $oldLimit = $currentCpuLimit
+                $currentCpuLimit = [math]::Min(100, $currentCpuLimit + 5)
+                $stableBelowCounter = 0
+                Write-Host ("[" + $now + "] [ADAPTIVE PROBE +5%] NVMe stable at " + $temp + " C for " + $dwellRequiredSeconds + "s. Probing CPU UP: " + $oldLimit + "% -> " + $currentCpuLimit + "%") -ForegroundColor DarkGreen
+                Set-CpuThrottleLimit -Percent $currentCpuLimit
+            } else {
+                $remain = $dwellRequiredSeconds - $stableBelowCounter
+                Write-Host ("[" + $now + "] " + $stateTag + " NVMe Temp: " + $temp + " C (Stable: " + $remain + "s remaining to probe +" + 5 + "% to " + ($currentCpuLimit + 5) + "%)") -ForegroundColor DarkGray
+            }
+        }
+        elseif ($probePenaltyCounter -gt 0) {
+            Write-Host ("[" + $now + "] " + $stateTag + " NVMe Temp: " + $temp + " C (Locked at CPU " + $currentCpuLimit + "%: Probe cooldown penalty " + $probePenaltyCounter + "s)") -ForegroundColor DarkGray
+        }
+        else {
+            Write-Host ("[" + $now + "] " + $stateTag + " NVMe Temp: " + $temp + " C (Locked at optimal ceiling: " + $currentCpuLimit + "%, Poll: " + $pollInterval + "s)") -ForegroundColor $stateColor
+        }
     }
     
-    # 2. Aggressive Stall-Timeout Logic (If -Aggressive is enabled)
+    # Aggressive Stall Timeout Check
     if ($Aggressive) {
         if ($temp -ge 56) {
             $stalledHotCounter += $pollInterval
             if ($stalledHotCounter -ge 90 -and -not $isAggressiveThrottled) {
                 $isAggressiveThrottled = $true
-                $targetLimit = [math]::Max(30, $targetLimit - 10)
-                $stateTag = "[AGGRESSIVE DEEP THROTTLE]"
-                $stateColor = "DarkRed"
-                $statusMsg = "AGGRESSIVE_STALL_DEEP_THROTTLE"
-                Write-Host ("[" + $now + "] ⚠️ [AGGRESSIVE] Temperature stalled >= 56 C for 90s! Forcing Deep Throttle to " + $targetLimit + "%...") -ForegroundColor DarkRed
+                $currentCpuLimit = [math]::Max(30, $currentCpuLimit - 10)
+                Write-Host ("[" + $now + "] ⚠️ [AGGRESSIVE] Stalled >= 56 C for 90s! Forcing Deep Throttle to " + $currentCpuLimit + "% & De-prioritizing I/O...") -ForegroundColor DarkRed
+                Set-CpuThrottleLimit -Percent $currentCpuLimit
                 Set-BackgroundIoState -Suspend $true
             }
         } else {
@@ -191,36 +232,6 @@ while ($true) {
                 Set-BackgroundIoState -Suspend $false
             }
         }
-    }
-    
-    # 3. Step-Down Logic (IMMEDIATE) vs Step-Up Logic (+10% STABILITY GATED)
-    if ($targetLimit -lt $currentCpuLimit) {
-        # Immediate Step-Down on thermal rise
-        $oldLimit = $currentCpuLimit
-        $currentCpuLimit = $targetLimit
-        $stableBelowCounter = 0
-        Write-Host ("[" + $now + "] " + $stateTag + " NVMe is " + $temp + " C! Stepping DOWN CPU: " + $oldLimit + "% -> " + $currentCpuLimit + "%") -ForegroundColor $stateColor
-        Set-CpuThrottleLimit -Percent $currentCpuLimit
-    }
-    elseif ($targetLimit -gt $currentCpuLimit) {
-        # Step-Up requested: Check if we have dwelled long enough
-        $stableBelowCounter += $pollInterval
-        if ($stableBelowCounter -ge $dwellRequiredSeconds) {
-            # Step up by exactly +10%
-            $oldLimit = $currentCpuLimit
-            $currentCpuLimit = [math]::Min(100, $currentCpuLimit + 10)
-            $stableBelowCounter = 0
-            Write-Host ("[" + $now + "] [STABLE STEP-UP] NVMe sustained " + $temp + " C for " + $dwellRequiredSeconds + "s. Stepping UP CPU (+10%): " + $oldLimit + "% -> " + $currentCpuLimit + "%") -ForegroundColor DarkGreen
-            Set-CpuThrottleLimit -Percent $currentCpuLimit
-        } else {
-            $remain = $dwellRequiredSeconds - $stableBelowCounter
-            Write-Host ("[" + $now + "] " + $stateTag + " NVMe Temp: " + $temp + " C (Stabilizing at CPU " + $currentCpuLimit + "%: " + $remain + "s remaining for +10% step)") -ForegroundColor DarkGray
-        }
-    }
-    else {
-        # Steady state at current limit
-        $stableBelowCounter = 0
-        Write-Host ("[" + $now + "] " + $stateTag + " NVMe Temp: " + $temp + " C (CPU: " + $currentCpuLimit + "%, Poll: " + $pollInterval + "s)") -ForegroundColor $stateColor
     }
     
     # Append to CSV log
