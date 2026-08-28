@@ -224,15 +224,19 @@ Actions taken:
 
 ### 3.2 Active Crashes During August 28 Session
 
-Five crashes occurred during the session:
+Nine crashes occurred during the session across morning forensic analysis and afternoon thermal stress testing:
 
-| Timestamp | Bugcheck | Hex | Name |
-| :--- | :--- | :--- | :--- |
-| 28/08/2026 10:28 | 340 | 0x154 | UNEXPECTED_STORE_EXCEPTION |
-| 28/08/2026 10:44 | 340 | 0x154 | UNEXPECTED_STORE_EXCEPTION |
-| 28/08/2026 10:59 | 340 | 0x154 | UNEXPECTED_STORE_EXCEPTION |
-| 28/08/2026 11:15 | 122 | 0x7A | KERNEL_DATA_INPAGE_ERROR |
-| 28/08/2026 11:29 | 30 | 0x1E | KMODE_EXCEPTION_NOT_HANDLED (0xC0000006) |
+| Timestamp | Bugcheck | Hex | Name | Context / Trigger |
+| :--- | :--- | :--- | :--- | :--- |
+| 28/08/2026 10:28 | 340 | 0x154 | UNEXPECTED_STORE_EXCEPTION | Initial load / 1000MB pagefile cap |
+| 28/08/2026 10:44 | 340 | 0x154 | UNEXPECTED_STORE_EXCEPTION | Pagefile transition reboot |
+| 28/08/2026 10:59 | 340 | 0x154 | UNEXPECTED_STORE_EXCEPTION | VSS Shadow Storage abort (Event 36) |
+| 28/08/2026 11:15 | 122 | 0x7A | KERNEL_DATA_INPAGE_ERROR | Heavy memory pressure / NVMe paging timeout |
+| 28/08/2026 11:29 | 30 | 0x1E | KMODE_EXCEPTION_NOT_HANDLED (0xC0000006) | ATAPort Event 507 SCSI SRB request failure |
+| 28/08/2026 14:01 | 239 | 0xEF | CRITICAL_PROCESS_DIED | DiskSpd 4K queue depth test (NVMe peaked at 64C) |
+| 28/08/2026 14:52 | 340 | 0x154 | UNEXPECTED_STORE_EXCEPTION | Rapid 50% -> 100% CPU boost rebound shockwave |
+| 28/08/2026 15:06 | 340 | 0x154 | UNEXPECTED_STORE_EXCEPTION | Sustained 100% CPU load at 56C heat soak |
+| 28/08/2026 15:27 | 122 | 0x7A | KERNEL_DATA_INPAGE_ERROR | 20% coarse jump from 60% -> 80% (P1=0x20 read fail) |
 
 Every crash: volmgr Event 161 dump creation failed, BugCheckProgress 0x00040049.
 No minidumps created on any crash - dump writer stalled every time.
@@ -406,6 +410,30 @@ Current Windows OpenSSH version: included with Windows 11 Build 26200.
 
 ---
 
+### 3.11 Development & Validation of 5% Adaptive Micro-Probe Thermal Governor
+
+Following the afternoon DiskSpd and multi-threaded stress tests, a software governor was engineered to protect the machine from NVMe thermal saturation while the physical M.2 thermal pad replacement is pending.
+
+#### Evolution of the Thermal Safeguard:
+1. **Version 1 (Coarse 20% On/Off Watchdog)**:
+   - Throttled CPU to 50% at 70C; restored 100% at 60C.
+   - *Result*: Trapped in a hunting oscillation between 60% and 80%, triggering a rebound crash (0x154) when jumping instantly from 50% -> 100%.
+2. **Version 2 (10% Fine-Grained Ladder)**:
+   - Stepped in 10% increments (90%, 80%, 70%, 60%, 50%, 40%) with 25s dwell stability gating.
+   - *Result*: Successfully eliminated thermal runaway, identifying 70% CPU as the stable baseline at 54C.
+3. **Version 3 (5% Adaptive Micro-Probe Governor with Rollback Memory)**:
+   - Micro-steps in 5% increments with 30s stability gating.
+   - If temperature holds <= 54C for 30s, probes +5% upward (e.g. 70% -> 75% -> 80%).
+   - If temperature touches 55C, instantly rolls back to 60% with a 60-second probe penalty timer to prevent rapid oscillation.
+   - Includes optional `-Aggressive` switch to deep-throttle and de-prioritize background I/O (Dropbox) if stalled >= 56C for > 90s.
+
+#### Empirical Validation Trace:
+- Handled a sudden external load surge: stepped down proportionally 70% -> 60% -> 50%, capping the thermal crest at 57C (well below the 64C crash boundary).
+- After load subsided, the governor walked back up: 50% -> 60% -> 65% -> 70% -> 75% -> 80% -> 85% -> 90%.
+- System settled into steady-state operation at **90% CPU performance at 47C with zero crashes**.
+
+---
+
 ## 4. Active NTFS Junctions (August 27-28, 2026)
 
 All junctions created using: New-Item -ItemType Junction -Path <src> -Target <dst>
@@ -487,3 +515,4 @@ C: free space varies as automatic pagefile dynamically sizes under load.
 | Upgrade OpenSSH server | Low | Eliminate post-quantum key exchange warning from SSH clients |
 | Reduce concurrent Firefox sessions | Low | 6 processes reached 3.3 GB RAM peak, drives heavy NVMe paging |
 | Consider Dropbox RAM/sync impact | Low | Dropbox using 1 GB RAM + active sync adds continuous NVMe I/O |
+
