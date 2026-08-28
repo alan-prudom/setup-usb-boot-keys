@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
-    Proportional Multi-Stage NVMe Thermal Governor & Adaptive Watchdog
+    10% Fine-Grained Proportional NVMe Thermal Governor & Adaptive Watchdog
 .DESCRIPTION
-    Continuously monitors Samsung NVMe SSD temperature and applies smooth,
-    multi-stage CPU throttling via powercfg to prevent thermal saturation.
-    Features adaptive sampling (1s to 10s), stability-gated step-ups, and an
-    optional -Aggressive mode with stall-timeout deep throttling.
+    Continuously monitors Samsung NVMe SSD temperature and applies smooth
+    10% micro-step CPU throttling via powercfg to prevent thermal saturation.
+    Features adaptive sampling (1s to 10s), stability-gated +10% step-ups,
+    and an optional -Aggressive mode with stall-timeout deep throttling.
 .PARAMETER Aggressive
     Enables active stall-timeout escalation: if temperature remains >= 56°C for > 90s,
     deepens CPU throttling and pauses heavy background sync I/O until cooled.
@@ -59,8 +59,7 @@ function Set-BackgroundIoState {
         $p = Get-Process -Name $pName -ErrorAction SilentlyContinue
         if ($p) {
             if ($Suspend) {
-                Write-Host ("[AGGRESSIVE] Pausing background I/O process: " + $pName) -ForegroundColor DarkYellow
-                # In PowerShell on Windows, we can adjust priority to Idle to de-prioritize disk I/O
+                Write-Host ("[AGGRESSIVE] De-prioritizing background I/O process: " + $pName) -ForegroundColor DarkYellow
                 $p | ForEach-Object { $_.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::Idle }
             } else {
                 Write-Host ("[AGGRESSIVE] Restoring background I/O process: " + $pName) -ForegroundColor DarkGreen
@@ -78,23 +77,26 @@ if (-not (Test-Path $LogFile)) {
 # State Variables
 $currentCpuLimit = 100
 $stableBelowCounter = 0      # Seconds spent stably below next step-up threshold
-$dwellRequiredSeconds = 30   # Must remain stable for 30s before stepping up
+$dwellRequiredSeconds = 25   # Must remain stable for 25s before stepping up +10%
 $stalledHotCounter = 0       # Seconds spent stalled at >= 56°C (for -Aggressive mode)
 $isAggressiveThrottled = $false
 
 Write-Host "==========================================================" -ForegroundColor DarkCyan
-Write-Host "  Proportional Multi-Stage NVMe Thermal Governor" -ForegroundColor DarkCyan
+Write-Host "  10% Fine-Grained NVMe Proportional Thermal Governor" -ForegroundColor DarkCyan
 Write-Host "==========================================================" -ForegroundColor DarkCyan
-Write-Host "  Thermal Ladder & Power Profiles:" -ForegroundColor Black
-Write-Host "    [NORMAL]    < 50 C  -> CPU 100% (Poll: 10s)" -ForegroundColor DarkGreen
-Write-Host "    [WARM]     50-54 C  -> CPU  80% (Poll:  5s)" -ForegroundColor DarkYellow
-Write-Host "    [HOT]      55-58 C  -> CPU  60% (Poll:  3s)" -ForegroundColor DarkMagenta
-Write-Host "    [CRITICAL] >= 59 C  -> CPU  40% (Poll:  1s)" -ForegroundColor DarkRed
-Write-Host "  Step-Up Gating : 30s continuous stability required" -ForegroundColor DarkGray
+Write-Host "  10% Micro-Stepping Ladder:" -ForegroundColor Black
+Write-Host "    [NORMAL]    <= 46 C  -> CPU 100% (Poll: 10s)" -ForegroundColor DarkGreen
+Write-Host "    [TIER 90]   47-49 C  -> CPU  90% (Poll:  8s)" -ForegroundColor DarkGreen
+Write-Host "    [TIER 80]   50-52 C  -> CPU  80% (Poll:  5s)" -ForegroundColor DarkYellow
+Write-Host "    [TIER 70]   53-54 C  -> CPU  70% (Poll:  4s)" -ForegroundColor DarkYellow
+Write-Host "    [TIER 60]   55-56 C  -> CPU  60% (Poll:  3s)" -ForegroundColor DarkMagenta
+Write-Host "    [TIER 50]   57-58 C  -> CPU  50% (Poll:  2s)" -ForegroundColor DarkMagenta
+Write-Host "    [CRITICAL]  >= 59 C  -> CPU  40% (Poll:  1s)" -ForegroundColor DarkRed
+Write-Host "  Step-Up Gating : 25s continuous stability for each +10% step" -ForegroundColor DarkGray
 if ($Aggressive) {
     Write-Host "  Aggressive Mode: ACTIVE (Stall Timeout > 90s triggers deep throttle & I/O back-off)" -ForegroundColor DarkYellow
 } else {
-    Write-Host "  Aggressive Mode: OFF (Standard Proportional Mode)" -ForegroundColor DarkGray
+    Write-Host "  Aggressive Mode: OFF (Standard 10% Proportional Mode)" -ForegroundColor DarkGray
 }
 Write-Host ("  Log File       : " + $LogFile) -ForegroundColor Black
 if ($TestMode) { Write-Host "  MODE           : DRY RUN (TestMode)" -ForegroundColor DarkBlue }
@@ -111,7 +113,7 @@ while ($true) {
         continue
     }
     
-    # 1. Determine Target Tier & Adaptive Poll Interval based on Temperature
+    # 1. Determine Target Tier & Adaptive Poll Interval (10% Fine Grained)
     $targetLimit = 100
     $pollInterval = 10
     $stateTag = "[NORMAL 100%]"
@@ -125,19 +127,40 @@ while ($true) {
         $stateColor = "DarkRed"
         $statusMsg = "CRITICAL_THROTTLING"
     }
+    elseif ($temp -ge 57) {
+        $targetLimit = 50
+        $pollInterval = 2
+        $stateTag = "[TIER 50%]"
+        $stateColor = "DarkMagenta"
+        $statusMsg = "TIER_50_COOLING"
+    }
     elseif ($temp -ge 55) {
         $targetLimit = 60
         $pollInterval = 3
-        $stateTag = "[HOT 60%]"
+        $stateTag = "[TIER 60%]"
         $stateColor = "DarkMagenta"
-        $statusMsg = "HOT_ACTIVE_COOLING"
+        $statusMsg = "TIER_60_COOLING"
+    }
+    elseif ($temp -ge 53) {
+        $targetLimit = 70
+        $pollInterval = 4
+        $stateTag = "[TIER 70%]"
+        $stateColor = "DarkYellow"
+        $statusMsg = "TIER_70_SUSTAINED"
     }
     elseif ($temp -ge 50) {
         $targetLimit = 80
         $pollInterval = 5
-        $stateTag = "[WARM 80%]"
+        $stateTag = "[TIER 80%]"
         $stateColor = "DarkYellow"
-        $statusMsg = "WARM_PREVENTATIVE"
+        $statusMsg = "TIER_80_WARM"
+    }
+    elseif ($temp -ge 47) {
+        $targetLimit = 90
+        $pollInterval = 8
+        $stateTag = "[TIER 90%]"
+        $stateColor = "DarkGreen"
+        $statusMsg = "TIER_90_HIGH"
     }
     else {
         $targetLimit = 100
@@ -153,7 +176,7 @@ while ($true) {
             $stalledHotCounter += $pollInterval
             if ($stalledHotCounter -ge 90 -and -not $isAggressiveThrottled) {
                 $isAggressiveThrottled = $true
-                $targetLimit = [math]::Max(25, $targetLimit - 15) # Drop an extra 15% (e.g. 60% -> 45%)
+                $targetLimit = [math]::Max(30, $targetLimit - 10)
                 $stateTag = "[AGGRESSIVE DEEP THROTTLE]"
                 $stateColor = "DarkRed"
                 $statusMsg = "AGGRESSIVE_STALL_DEEP_THROTTLE"
@@ -164,13 +187,13 @@ while ($true) {
             $stalledHotCounter = 0
             if ($isAggressiveThrottled -and $temp -le 52) {
                 $isAggressiveThrottled = $false
-                Write-Host ("[" + $now + "] [AGGRESSIVE] Temperature recovered <= 52 C. Clearing deep throttle state.") -ForegroundColor DarkGreen
+                Write-Host ("[" + $now + "] [AGGRESSIVE] Temperature recovered <= 52 C. Restoring normal sync state.") -ForegroundColor DarkGreen
                 Set-BackgroundIoState -Suspend $false
             }
         }
     }
     
-    # 3. Step-Down Logic (IMMEDIATE) vs Step-Up Logic (STABILITY GATED)
+    # 3. Step-Down Logic (IMMEDIATE) vs Step-Up Logic (+10% STABILITY GATED)
     if ($targetLimit -lt $currentCpuLimit) {
         # Immediate Step-Down on thermal rise
         $oldLimit = $currentCpuLimit
@@ -183,22 +206,15 @@ while ($true) {
         # Step-Up requested: Check if we have dwelled long enough
         $stableBelowCounter += $pollInterval
         if ($stableBelowCounter -ge $dwellRequiredSeconds) {
+            # Step up by exactly +10%
             $oldLimit = $currentCpuLimit
-            $nextStep = switch ($currentCpuLimit) {
-                25 { 40 }
-                40 { 60 }
-                45 { 60 }
-                60 { 80 }
-                80 { 100 }
-                default { 100 }
-            }
-            $currentCpuLimit = $nextStep
+            $currentCpuLimit = [math]::Min(100, $currentCpuLimit + 10)
             $stableBelowCounter = 0
-            Write-Host ("[" + $now + "] [STABLE STEP-UP] NVMe sustained " + $temp + " C for " + $dwellRequiredSeconds + "s. Stepping UP CPU: " + $oldLimit + "% -> " + $currentCpuLimit + "%") -ForegroundColor DarkGreen
+            Write-Host ("[" + $now + "] [STABLE STEP-UP] NVMe sustained " + $temp + " C for " + $dwellRequiredSeconds + "s. Stepping UP CPU (+10%): " + $oldLimit + "% -> " + $currentCpuLimit + "%") -ForegroundColor DarkGreen
             Set-CpuThrottleLimit -Percent $currentCpuLimit
         } else {
             $remain = $dwellRequiredSeconds - $stableBelowCounter
-            Write-Host ("[" + $now + "] " + $stateTag + " NVMe Temp: " + $temp + " C (Stabilizing at CPU " + $currentCpuLimit + "%: " + $remain + "s remaining)") -ForegroundColor DarkGray
+            Write-Host ("[" + $now + "] " + $stateTag + " NVMe Temp: " + $temp + " C (Stabilizing at CPU " + $currentCpuLimit + "%: " + $remain + "s remaining for +10% step)") -ForegroundColor DarkGray
         }
     }
     else {
