@@ -497,6 +497,30 @@ Rather than reacting solely to the NVMe silicon temperature (which has high ther
 * **Terminal TUI Dashboard (`scripts/diagnostic_and_maintenance/nvme_tui.py`)**:
   * Interactive Rich/Textual terminal dashboard runnable via `uv`.
   * Strict column vertical alignment and high-contrast light mode palette.
+* **Unified System Tray & Web App (`scripts/diagnostic_and_maintenance/nvme_tray.py`)**:
+  * Native Windows Taskbar Tray icon dynamically painting live temperature numbers via `pystray` and `Pillow`.
+  * Right-click context menu for instantaneous Max CPU Ceiling overrides (70% - 90%).
+  * Concurrently hosts the embedded Web Server on port 8899 with 100% Avast whitelisting.
+
+---
+
+## 3.14 Afternoon Stress Test & Crash 21 Investigation (August 29, 2026 13:26:21)
+
+During heavy multithreaded CPU hashing + sustained 64MB unbuffered NVMe disk I/O testing, the system reached 63°C, triggered an autonomous emergency step-down to 40%, cooled to 51°C in 159 seconds, and then experienced BugCheck 340 upon step-up:
+
+| Timestamp | Event ID | Bugcheck | Hex | Name | Parameter 1 | Trigger Mechanism |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **08/29/2026 13:26:21** | 41 | 340 | `0x154` | `UNEXPECTED_STORE_EXCEPTION` | `0xffffbb8752509000` | Post-emergency step-up transition surge: jumping directly from 40% to 70% while NAND substrate was still heat-saturated caused disk queue burst latency spike. |
+
+### Failure Mechanism Discovered:
+* The surface silicon sensor cooled to 51°C, but the internal NAND flash substrate and controller package retained latent heat.
+* Stepping CPU power directly from 40% to 70% allowed background backlog processes to burst I/O requests simultaneously, generating a $>485\text{ ms}$ latency timeout on the warm controller.
+
+### Solution: Governor v2.1 (Gentle Multi-Step Recovery & Cold-Soak Damping Engine)
+1. **Gentle Multi-Step Recovery (+5% Micro-Steps)**: Eliminates the 40% $\rightarrow$ 70% jump. Steps up in gentle increments (`40% -> 50% -> 60% -> 65% -> 70%`).
+2. **120-Second Cold-Soak Dwell**: Requires a 2-minute stable thermal soak below 50°C following any emergency clamp before initiating step-ups, allowing full substrate heat dissipation.
+3. **Queue Surge Damping**: Prevents disk I/O backlog spikes from overwhelming the Samsung controller.
+
 
 ---
 

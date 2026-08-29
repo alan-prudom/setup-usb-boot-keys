@@ -7,11 +7,13 @@ This directory contains PowerShell and batch diagnostic scripts generated during
 ### Real-Time Protection & Hardware Safeguards
 | Script / Binary | Description |
 | :--- | :--- |
-| [`../../src/NVMeThermalDaemon.cs`](../../src/NVMeThermalDaemon.cs) | **Dual-Sensor Predictive NVMe Thermal Governor (C# Source)**: Native C# background daemon with direct Win32 `powrprof.dll` P/Invoke, dual-sensor polling (NVMe die + ACPI zone), `D:\nvme_state.json` atomic stream, and 7-day state-change daily CSV logging. |
-| [`../../bin/NVMeThermalDaemon.exe`](../../bin/NVMeThermalDaemon.exe) | **Compiled Native Daemon Binary**: 12 MB RAM footprint, <0.05% CPU, runs standalone or as a Windows Scheduled Task. |
+| [`../../src/NVMeThermalDaemon.cs`](../../src/NVMeThermalDaemon.cs) | **Dual-Sensor Predictive NVMe Thermal Governor (C# Source v2.1)**: Native C# background daemon with direct Win32 `powrprof.dll` P/Invoke, dual-sensor polling (NVMe die + ACPI zone), `D:\nvme_state.json` atomic stream, gentle multi-step recovery (+5%), 120s cold-soak dwell, and 7-day state-change daily CSV logging. |
+| [`../../bin/NVMeThermalDaemon.exe`](../../bin/NVMeThermalDaemon.exe) | **Compiled Native Daemon Binary (v2.1)**: 12–19 MB RAM footprint, <0.05% CPU, runs 24/7 standalone or as a Windows Scheduled Task. |
+| [`nvme_tray.py`](nvme_tray.py) | **Unified Python System Tray & Web Dashboard (via `uv`)**: Native Windows taskbar live temperature icon (`pystray` + `Pillow`), right-click CPU ceiling override menu, embedded Web Server on port 8899, and zero Avast false-positives. |
 | [`nvme_web.py`](nvme_web.py) | **Python Micro Web Server (Port 8899 via `uv`)**: Serves responsive live HTML dashboard (Light mode default with interactive Dark/Light toggle) and `/api/state` for Safari on macOS. |
 | [`nvme_tui.py`](nvme_tui.py) | **Python Terminal TUI Dashboard (via `uv`)**: Interactive Rich/Textual terminal dashboard with strict column alignment, ASCII/Unicode gauges, and live $\Delta T$ gradient. |
 | [`nvme_thermal_watchdog.ps1`](nvme_thermal_watchdog.ps1) | **5% Adaptive Micro-Probe NVMe Thermal Governor (PowerShell)**: Standalone PowerShell implementation with `-MaxCpu` override and `-Aggressive` background I/O throttle. |
+
 
 
 ### Controlled Stress Testing & Thermal Verification
