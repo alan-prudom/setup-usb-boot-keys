@@ -4,11 +4,12 @@
 # ///
 
 import os
+import sys
 import json
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 STATE_FILE = r"D:\nvme_state.json"
-PORT = 8550
+DEFAULT_PORTS = [8899, 8088, 9090, 8585, 8550]
 
 DASHBOARD_HTML = """<!DOCTYPE html>
 <html>
@@ -117,9 +118,22 @@ class DashboardHandler(BaseHTTPRequestHandler):
         pass
 
 def run():
-    server = HTTPServer(("0.0.0.0", PORT), DashboardHandler)
-    print(f"🛡️  NVMe Thermal Web Dashboard running at http://localhost:{PORT}")
-    print(f"🌐 Remote access via Tailscale: http://100.127.153.93:{PORT}")
+    server = None
+    active_port = None
+    for p in DEFAULT_PORTS:
+        try:
+            server = HTTPServer(("0.0.0.0", p), DashboardHandler)
+            active_port = p
+            break
+        except Exception:
+            continue
+
+    if not server:
+        print("❌ Error: Could not bind to any candidate ports (8899, 8088, 9090, 8585).")
+        sys.exit(1)
+
+    print(f"🛡️  NVMe Thermal Web Dashboard running at http://localhost:{active_port}")
+    print(f"🌐 Remote access via Tailscale: http://100.127.153.93:{active_port}")
     server.serve_forever()
 
 if __name__ == "__main__":
