@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text;
 using System.Threading;
+using System.Diagnostics;
 using System.Management;
 using System.Runtime.InteropServices;
 
@@ -9,263 +10,410 @@ namespace NVMeThermal
 {
     public class Daemon
     {
+        // P/Invoke for Direct Win32 Power Scheme Manipulation (Zero Child Process Overhead)
         [DllImport("powrprof.dll", SetLastError = true)]
-        private static extern uint PowerGetActiveScheme(IntPtr UserRootPowerKey, out IntPtr ActivePolicyGuid);
+        private static extern uint PowerWriteACValueIndex(
+            IntPtr RootPowerKey,
+            ref Guid SchemeGuid,
+            ref Guid SubGroupOfPowerSettingsGuid,
+            ref Guid PowerSettingGuid,
+            uint AcValueIndex
+        );
 
         [DllImport("powrprof.dll", SetLastError = true)]
-        private static extern uint PowerWriteACValueIndex(IntPtr RootPowerKey, ref Guid SchemeGuid, ref Guid SubGroupOfPowerSettingsGuid, ref Guid PowerSettingGuid, uint AcValueIndex);
+        private static extern uint PowerSetActiveScheme(
+            IntPtr UserRootPowerKey,
+            ref Guid SchemeGuid
+        );
 
         [DllImport("powrprof.dll", SetLastError = true)]
-        private static extern uint PowerWriteDCValueIndex(IntPtr RootPowerKey, ref Guid SchemeGuid, ref Guid SubGroupOfPowerSettingsGuid, ref Guid PowerSettingGuid, uint DcValueIndex);
+        private static extern uint PowerGetActiveScheme(
+            IntPtr UserRootPowerKey,
+            out IntPtr ActivePolicyGuid
+        );
 
-        [DllImport("powrprof.dll", SetLastError = true)]
-        private static extern uint PowerSetActiveScheme(IntPtr UserRootPowerKey, ref Guid SchemeGuid);
+        // Power Setting GUIDs
+        private static Guid GUID_PROCESSOR_SETTINGS_SUBGROUP = new Guid("54533251-82be-4824-96c1-47b60b740d00");
+        private static Guid GUID_PROCTHROTTLEMAX = new Guid("bc5038f7-23e0-4960-96da-33abaf5935ec");
 
-        private static readonly Guid GUID_PROCESSOR_SETTINGS_SUBGROUP = new Guid("54533251-82be-4824-96c1-47b60b740d00");
-        private static readonly Guid GUID_PROCESSOR_THROTTLE_MAX = new Guid("bc5038f7-23e0-4960-96da-33abaf5935ec");
-
+        // Paths
         private const string STATE_FILE = @"D:\nvme_state.json";
         private const string CONTROL_FILE = @"D:\nvme_control.json";
         private const string LOG_DIR = @"D:\logs";
-        private const int DWELL_SECONDS = 30;
-        private const int PROBE_PENALTY_DEFAULT = 60;
-        private const int LOG_RETENTION_DAYS = 7;
 
-        private static int maxCeiling = 75;
-        private static int currentCpuLimit = 70;
-        private static int stableBelowCounter = 0;
-        private static int probePenaltyCounter = 0;
-        private static int lastLoggedNvmeTemp = -1;
-        private static int lastLoggedChassisTemp = -1;
+        // Configuration
+        private static int maxCpuCeiling = 75; // Default 75%
+        private const int SAFE_FLOOR_TEMP = 50;
+        private const int SUSTAINED_TEMP_LOW = 51;
+        private const int SUSTAINED_TEMP_HIGH = 54;
+        private const int ACTIVE_STEP_TEMP = 55;
+        private const int DEEP_COOL_TEMP = 57;
+        private const int CRITICAL_TEMP = 59;
+        private const int CHASSIS_PREDICTIVE_LIMIT = 38;
+
+        // Enhanced Recovery Dwell Configuration
+        private const int STANDARD_DWELL_SEC = 30;
+        private const int COLD_SOAK_DWELL_SEC = 120; // 120s cold soak after emergency clamp
+
+        // Runtime State
+        private static int currentCpuLimit = -1;
         private static int lastLoggedCpu = -1;
-        private static string lastLoggedState = "";
+        private static int lastLoggedTemp = -1;
+        private static int dwellTimer = 0;
+        private static int probePenaltyTimer = 0;
+        private static bool inEmergencyCooldown = false;
+        private static Guid activeSchemeGuid;
 
         public static void Main(string[] args)
         {
-            for (int i = 0; i < args.Length; i++)
+            Console.WriteLine("==========================================================");
+            Console.WriteLine("  Dual-Sensor Predictive NVMe Thermal Governor (v2.1)    ");
+            Console.WriteLine("  [Gentle Multi-Step Recovery & Cold-Soak Damping Engine] ");
+            Console.WriteLine("==========================================================");
+
+            int customMax;
+            if (args.Length > 0 && int.TryParse(args[0], out customMax))
             {
-                if ((args[i] == "-MaxCpu" || args[i] == "--max-cpu") && i + 1 < args.Length)
-                {
-                    int val;
-                    if (int.TryParse(args[i + 1], out val) && val >= 40 && val <= 100)
-                    {
-                        maxCeiling = val;
-                    }
-                }
+                if (customMax >= 50 && customMax <= 100) maxCpuCeiling = customMax;
             }
 
-            Console.WriteLine("==========================================================");
-            Console.WriteLine("  Dual-Sensor Predictive NVMe Thermal Governor (C# Native)");
-            Console.WriteLine("==========================================================");
-            Console.WriteLine("  Max CPU Ceiling  : " + maxCeiling + "%");
+            Console.WriteLine("  Max CPU Ceiling  : " + maxCpuCeiling + "%");
             Console.WriteLine("  Sensors Monitored: Samsung NVMe Die + Chassis ACPI Zone");
+            Console.WriteLine("  Recovery Mode    : Gentle +5% Multi-Step with 120s Cold Soak");
             Console.WriteLine("  State Output     : " + STATE_FILE);
-            Console.WriteLine("  Log Directory    : " + LOG_DIR + " (7-day rotation, state-change only)");
+            Console.WriteLine("  Log Directory    : " + LOG_DIR);
             Console.WriteLine("----------------------------------------------------------");
 
             if (!Directory.Exists(LOG_DIR))
             {
-                Directory.CreateDirectory(LOG_DIR);
+                try { Directory.CreateDirectory(LOG_DIR); } catch { }
             }
 
-            currentCpuLimit = Math.Min(70, maxCeiling);
-            SetCpuPowerLimit(currentCpuLimit);
+            // Obtain active power scheme
+            IntPtr schemePtr;
+            if (PowerGetActiveScheme(IntPtr.Zero, out schemePtr) == 0)
+            {
+                activeSchemeGuid = (Guid)Marshal.PtrToStructure(schemePtr, typeof(Guid));
+            }
+            else
+            {
+                activeSchemeGuid = new Guid("381b4222-f694-41f0-9685-ff5bb260df2e"); // Balanced fallback
+            }
 
+            // Initialize Power
+            SetCpuPowerLimit(70);
+
+            // Housekeeping: Purge logs older than 7 days
+            PurgeOldLogs();
+
+            // Main Control Loop
             while (true)
             {
-                DateTime now = DateTime.Now;
-                CheckControlOverrides();
-                PurgeOldLogs();
-
-                int? nvmeTemp = ReadNVMeTemperature();
-                int? chassisTemp = ReadChassisTemperature();
-
-                if (!nvmeTemp.HasValue)
+                try
                 {
-                    Console.WriteLine("[" + now.ToString("HH:mm:ss") + "] [WARN] NVMe temp read failed. Retrying in 4s...");
+                    CheckControlOverrides();
+
+                    int nvmeTemp = GetNvmeDieTemperature();
+                    int chassisTemp = GetChassisAcpiTemperature();
+                    int thermalDelta = (nvmeTemp > 0 && chassisTemp > 0) ? (nvmeTemp - chassisTemp) : 0;
+
+                    if (nvmeTemp <= 0)
+                    {
+                        Console.WriteLine("[" + DateTime.Now.ToString("HH:mm:ss") + "] [WARN] NVMe temp read failed. Retrying in 4s...");
+                        Thread.Sleep(4000);
+                        continue;
+                    }
+
+                    int pollInterval = ProcessThermalLadder(nvmeTemp, chassisTemp, thermalDelta);
+                    Thread.Sleep(pollInterval * 1000);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("[ERROR] Governor Loop Exception: " + ex.Message);
                     Thread.Sleep(4000);
-                    continue;
                 }
+            }
+        }
 
-                int currentNvme = nvmeTemp.Value;
-                int currentChassis = chassisTemp.HasValue ? chassisTemp.Value : 0;
-                int deltaT = currentNvme - currentChassis;
+        private static int ProcessThermalLadder(int nvmeTemp, int chassisTemp, int deltaT)
+        {
+            int targetCpu = currentCpuLimit;
+            int pollSec = 4;
+            string stateTag = "NORMAL";
+            string statusDesc = "Stable";
 
-                if (probePenaltyCounter > 0)
-                {
-                    probePenaltyCounter = Math.Max(0, probePenaltyCounter - 4);
-                }
+            // Decrement penalty timer
+            if (probePenaltyTimer > 0)
+            {
+                probePenaltyTimer = Math.Max(0, probePenaltyTimer - 4);
+            }
 
-                int pollInterval = 4;
-                string stateTag = "SUSTAINED " + currentCpuLimit + "%";
-                string statusMsg = "Sustained";
-                bool powerChanged = false;
-
-                // 1. Reactive Thermal Safety Ladder (Based on NVMe Die)
-                if (currentNvme >= 59)
+            // Thermal Control Matrix
+            if (nvmeTemp >= CRITICAL_TEMP) // >= 59C
+            {
+                targetCpu = 40;
+                dwellTimer = 0;
+                probePenaltyTimer = 120; // Enforce 2-minute penalty
+                inEmergencyCooldown = true;
+                pollSec = 1;
+                stateTag = "CRITICAL 40%";
+                statusDesc = "Emergency Clamping (1s poll)";
+            }
+            else if (nvmeTemp >= DEEP_COOL_TEMP) // 57C - 58C
+            {
+                targetCpu = 40;
+                dwellTimer = 0;
+                probePenaltyTimer = 90;
+                inEmergencyCooldown = true;
+                pollSec = 2;
+                stateTag = "DEEP COOL 40%";
+                statusDesc = "Deep Cooling Step-Down";
+            }
+            else if (nvmeTemp >= ACTIVE_STEP_TEMP) // 55C - 56C
+            {
+                targetCpu = Math.Min(currentCpuLimit, 50); // Drop to 50%
+                dwellTimer = 0;
+                probePenaltyTimer = 60;
+                inEmergencyCooldown = true;
+                pollSec = 3;
+                stateTag = "ACTIVE 50%";
+                statusDesc = "Active Heat Safeguard";
+            }
+            else if (nvmeTemp >= SUSTAINED_TEMP_LOW && nvmeTemp <= SUSTAINED_TEMP_HIGH) // 51C - 54C
+            {
+                // In sustained zone, hold current safe floor
+                if (inEmergencyCooldown)
                 {
-                    pollInterval = 1;
-                    stateTag = "CRITICAL 40%";
-                    statusMsg = "CRITICAL_FLOOR";
-                    if (currentCpuLimit > 40)
-                    {
-                        currentCpuLimit = 40;
-                        probePenaltyCounter = 90;
-                        stableBelowCounter = 0;
-                        powerChanged = true;
-                        SetCpuPowerLimit(40);
-                    }
-                }
-                else if (currentNvme >= 57)
-                {
-                    pollInterval = 2;
-                    stateTag = "DEEP 50%";
-                    statusMsg = "DEEP_COOLING";
-                    if (currentCpuLimit > 50)
-                    {
-                        currentCpuLimit = 50;
-                        probePenaltyCounter = 60;
-                        stableBelowCounter = 0;
-                        powerChanged = true;
-                        SetCpuPowerLimit(50);
-                    }
-                }
-                else if (currentNvme >= 55)
-                {
-                    pollInterval = 3;
-                    stateTag = "ACTIVE 60%";
-                    statusMsg = "ACTIVE_COOLING";
-                    if (currentCpuLimit > 60)
-                    {
-                        currentCpuLimit = 60;
-                        probePenaltyCounter = PROBE_PENALTY_DEFAULT;
-                        stableBelowCounter = 0;
-                        powerChanged = true;
-                        SetCpuPowerLimit(60);
-                    }
+                    // Gentle step-up recovery: don't exceed 60% while still in sustained zone
+                    targetCpu = Math.Min(currentCpuLimit, 60);
                 }
                 else
                 {
-                    bool chassisHot = (currentChassis >= 38);
-                    int targetMax = (currentNvme <= 50 && !chassisHot) ? maxCeiling : Math.Min(maxCeiling, 70);
-                    stateTag = (currentNvme <= 50) ? ("OPTIMAL " + currentCpuLimit + "%") : ("SUSTAINED " + currentCpuLimit + "%");
+                    targetCpu = Math.Min(currentCpuLimit, 70);
+                }
+                dwellTimer = 0;
+                pollSec = 4;
+                stateTag = "SUSTAINED " + targetCpu + "%";
+                statusDesc = "Sustained Safe Limit";
+            }
+            else // <= 50C (OPTIMAL ZONE)
+            {
+                pollSec = 4;
+                int requiredDwell = inEmergencyCooldown ? COLD_SOAK_DWELL_SEC : STANDARD_DWELL_SEC;
 
-                    if (currentCpuLimit > targetMax)
+                if (probePenaltyTimer > 0)
+                {
+                    statusDesc = "Cooldown Penalty (" + probePenaltyTimer + "s rem)";
+                    stateTag = "COOLDOWN " + currentCpuLimit + "%";
+                }
+                else if (chassisTemp >= CHASSIS_PREDICTIVE_LIMIT)
+                {
+                    statusDesc = "Predictive Hold (Chassis >= " + CHASSIS_PREDICTIVE_LIMIT + "C)";
+                    stateTag = "PREDICTIVE " + currentCpuLimit + "%";
+                }
+                else
+                {
+                    dwellTimer += 4;
+                    if (dwellTimer >= requiredDwell)
                     {
-                        currentCpuLimit = targetMax;
-                        powerChanged = true;
-                        SetCpuPowerLimit(currentCpuLimit);
-                        if (chassisHot) statusMsg = "CHASSIS_HEAT_CLAMP";
-                    }
-                    else if (currentCpuLimit < targetMax && probePenaltyCounter == 0)
-                    {
-                        stableBelowCounter += pollInterval;
-                        if (stableBelowCounter >= DWELL_SECONDS)
+                        dwellTimer = 0;
+                        if (currentCpuLimit < maxCpuCeiling)
                         {
-                            currentCpuLimit = Math.Min(maxCeiling, currentCpuLimit + 5);
-                            stableBelowCounter = 0;
-                            powerChanged = true;
-                            SetCpuPowerLimit(currentCpuLimit);
-                            statusMsg = "PROBED_UP";
+                            // Gentle Multi-Step Probe: +5% micro-step
+                            targetCpu = Math.Min(maxCpuCeiling, currentCpuLimit + 5);
+                            statusDesc = "Gentle Probe (+5% -> " + targetCpu + "%)";
+                            
+                            // Clear emergency cooldown once we successfully reach 65%
+                            if (targetCpu >= 65) inEmergencyCooldown = false;
+                        }
+                        else
+                        {
+                            statusDesc = "Ceiling Sustained";
+                            inEmergencyCooldown = false;
                         }
                     }
                     else
                     {
-                        stableBelowCounter = 0;
+                        statusDesc = inEmergencyCooldown ? "Cold-Soak Dwell (" + (requiredDwell - dwellTimer) + "s rem)" : "Stable Dwell (" + (requiredDwell - dwellTimer) + "s rem)";
                     }
+                    stateTag = "OPTIMAL " + currentCpuLimit + "%";
                 }
-
-                Console.WriteLine(string.Format("[{0}] [{1}] NVMe: {2} C | Chassis: {3} C (Δ {4} C) | CPU: {5}% | Dwell: {6}s",
-                    now.ToString("HH:mm:ss"), stateTag, currentNvme, currentChassis, deltaT, currentCpuLimit, Math.Max(0, DWELL_SECONDS - stableBelowCounter)));
-
-                WriteStateJson(now, currentNvme, currentChassis, deltaT, currentCpuLimit, maxCeiling, stateTag, statusMsg, stableBelowCounter, probePenaltyCounter, pollInterval);
-
-                if (currentNvme != lastLoggedNvmeTemp || currentChassis != lastLoggedChassisTemp || currentCpuLimit != lastLoggedCpu || stateTag != lastLoggedState || powerChanged)
-                {
-                    AppendDailyLog(now, currentNvme, currentChassis, deltaT, currentCpuLimit, pollInterval, stateTag, statusMsg);
-                    lastLoggedNvmeTemp = currentNvme;
-                    lastLoggedChassisTemp = currentChassis;
-                    lastLoggedCpu = currentCpuLimit;
-                    lastLoggedState = stateTag;
-                }
-
-                Thread.Sleep(pollInterval * 1000);
             }
-        }
 
-        private static int? ReadNVMeTemperature()
-        {
-            try
+            if (targetCpu != currentCpuLimit)
             {
-                System.Diagnostics.ProcessStartInfo psi = new System.Diagnostics.ProcessStartInfo();
-                psi.FileName = "powershell.exe";
-                psi.Arguments = "-NoProfile -Command \"(Get-PhysicalDisk | Get-StorageReliabilityCounter).Temperature\"";
-                psi.RedirectStandardOutput = true;
-                psi.UseShellExecute = false;
-                psi.CreateNoWindow = true;
-                using (System.Diagnostics.Process p = System.Diagnostics.Process.Start(psi))
-                {
-                    string outStr = p.StandardOutput.ReadToEnd();
-                    p.WaitForExit(3000);
-                    
-                    string[] tokens = outStr.Split(new char[] { '\r', '\n', ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-                    foreach (string token in tokens)
-                    {
-                        int val;
-                        if (int.TryParse(token, out val) && val > 20 && val < 120)
-                        {
-                            return val;
-                        }
-                    }
-                }
+                SetCpuPowerLimit(targetCpu);
             }
-            catch { }
-            return null;
-        }
 
-        private static int? ReadChassisTemperature()
-        {
-            try
-            {
-                ManagementScope acpiScope = new ManagementScope(@"\\.\root\wmi");
-                acpiScope.Connect();
-                using (ManagementObjectSearcher s = new ManagementObjectSearcher(acpiScope, new ObjectQuery("SELECT CurrentTemperature FROM MSAcpi_ThermalZoneTemperature")))
-                {
-                    foreach (ManagementObject obj in s.Get())
-                    {
-                        object val = obj["CurrentTemperature"];
-                        if (val != null)
-                        {
-                            int deciKelvin = Convert.ToInt32(val);
-                            int celsius = (deciKelvin - 2732) / 10;
-                            if (celsius > 10 && celsius < 110) return celsius;
-                        }
-                    }
-                }
-            }
-            catch { }
-            return null;
+            WriteStateSnapshot(nvmeTemp, chassisTemp, deltaT, currentCpuLimit, maxCpuCeiling, stateTag, statusDesc, dwellTimer, probePenaltyTimer, pollSec);
+            LogStateChange(nvmeTemp, chassisTemp, deltaT, currentCpuLimit, stateTag, statusDesc, pollSec);
+
+            return pollSec;
         }
 
         private static void SetCpuPowerLimit(int percent)
         {
+            percent = Math.Max(30, Math.Min(100, percent));
             try
             {
-                IntPtr pActiveGuid;
-                if (PowerGetActiveScheme(IntPtr.Zero, out pActiveGuid) == 0 && pActiveGuid != IntPtr.Zero)
-                {
-                    Guid activeScheme = (Guid)Marshal.PtrToStructure(pActiveGuid, typeof(Guid));
-                    Guid subGroup = GUID_PROCESSOR_SETTINGS_SUBGROUP;
-                    Guid setting = GUID_PROCESSOR_THROTTLE_MAX;
+                uint res1 = PowerWriteACValueIndex(
+                    IntPtr.Zero,
+                    ref activeSchemeGuid,
+                    ref GUID_PROCESSOR_SETTINGS_SUBGROUP,
+                    ref GUID_PROCTHROTTLEMAX,
+                    (uint)percent
+                );
 
-                    PowerWriteACValueIndex(IntPtr.Zero, ref activeScheme, ref subGroup, ref setting, (uint)percent);
-                    PowerWriteDCValueIndex(IntPtr.Zero, ref activeScheme, ref subGroup, ref setting, (uint)percent);
-                    PowerSetActiveScheme(IntPtr.Zero, ref activeScheme);
+                uint res2 = PowerSetActiveScheme(IntPtr.Zero, ref activeSchemeGuid);
+
+                if (res1 == 0 && res2 == 0)
+                {
+                    currentCpuLimit = percent;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Error setting CPU power: " + ex.Message);
+                Console.WriteLine("[ERROR] Power Setting P/Invoke Failed: " + ex.Message);
+            }
+        }
+
+        private static int GetNvmeDieTemperature()
+        {
+            try
+            {
+                ProcessStartInfo psi = new ProcessStartInfo();
+                psi.FileName = "powershell.exe";
+                psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -Command \"(Get-PhysicalDisk | Get-StorageReliabilityCounter).Temperature\"";
+                psi.RedirectStandardOutput = true;
+                psi.UseShellExecute = false;
+                psi.CreateNoWindow = true;
+
+                using (Process p = Process.Start(psi))
+                {
+                    string output = p.StandardOutput.ReadToEnd();
+                    p.WaitForExit(3000);
+                    
+                    string[] lines = output.Split(new char[] { '\r', '\n', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                    foreach (string token in lines)
+                    {
+                        int temp;
+                        if (int.TryParse(token.Trim(), out temp))
+                        {
+                            if (temp >= 20 && temp <= 110)
+                            {
+                                return temp;
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+            return -1;
+        }
+
+        private static int GetChassisAcpiTemperature()
+        {
+            try
+            {
+                using (ManagementObjectSearcher searcher = new ManagementObjectSearcher(@"root\wmi", "SELECT CurrentTemperature FROM MSAcpi_ThermalZoneTemperature"))
+                {
+                    foreach (ManagementObject obj in searcher.Get())
+                    {
+                        uint raw = (uint)obj["CurrentTemperature"];
+                        int celsius = (int)((raw - 2732) / 10);
+                        if (celsius >= 15 && celsius <= 100) return celsius;
+                    }
+                }
+            }
+            catch { }
+            return 30; // Nominal ambient fallback
+        }
+
+        private static void WriteStateSnapshot(int nvmeTemp, int chassisTemp, int deltaT, int cpuLimit, int ceiling, string tag, string status, int dwell, int penalty, int pollSec)
+        {
+            try
+            {
+                int reqDwell = inEmergencyCooldown ? COLD_SOAK_DWELL_SEC : STANDARD_DWELL_SEC;
+                int remDwell = Math.Max(0, reqDwell - dwell);
+                string json = string.Format(
+                    "{{\n" +
+                    "  \"timestamp\": \"{0}\",\n" +
+                    "  \"nvmeTempC\": {1},\n" +
+                    "  \"chassisTempC\": {2},\n" +
+                    "  \"thermalDelta\": {3},\n" +
+                    "  \"temperatureC\": {1},\n" +
+                    "  \"cpuLimitPercent\": {4},\n" +
+                    "  \"maxCeiling\": {5},\n" +
+                    "  \"stateTag\": \"{6}\",\n" +
+                    "  \"status\": \"{7}\",\n" +
+                    "  \"dwellElapsed\": {8},\n" +
+                    "  \"dwellRemaining\": {9},\n" +
+                    "  \"probePenaltyRemaining\": {10},\n" +
+                    "  \"pollIntervalSec\": {11}\n" +
+                    "}}",
+                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                    nvmeTemp,
+                    chassisTemp,
+                    deltaT,
+                    cpuLimit,
+                    ceiling,
+                    tag,
+                    status,
+                    dwell,
+                    remDwell,
+                    penalty,
+                    pollSec
+                );
+
+                string tempFile = STATE_FILE + ".tmp";
+                File.WriteAllText(tempFile, json, new UTF8Encoding(false)); // Write UTF-8 WITHOUT BOM
+                if (File.Exists(STATE_FILE)) File.Delete(STATE_FILE);
+                File.Move(tempFile, STATE_FILE);
+            }
+            catch { }
+        }
+
+        private static void LogStateChange(int nvmeTemp, int chassisTemp, int deltaT, int cpuLimit, string tag, string status, int pollSec)
+        {
+            if (cpuLimit != lastLoggedCpu || Math.Abs(nvmeTemp - lastLoggedTemp) >= 2)
+            {
+                lastLoggedCpu = cpuLimit;
+                lastLoggedTemp = nvmeTemp;
+
+                string logFile = Path.Combine(LOG_DIR, "nvme_thermal_" + DateTime.Now.ToString("yyyy-MM-dd") + ".csv");
+                bool isNew = !File.Exists(logFile);
+
+                try
+                {
+                    using (StreamWriter sw = new StreamWriter(logFile, true, Encoding.UTF8))
+                    {
+                        if (isNew)
+                        {
+                            sw.WriteLine("Timestamp,NVMeTempC,ChassisTempC,DeltaT,CpuLimitPercent,PollIntervalSec,StateTag,Status");
+                        }
+                        sw.WriteLine(string.Format("{0},{1},{2},{3},{4},{5},{6},{7}",
+                            DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                            nvmeTemp,
+                            chassisTemp,
+                            deltaT,
+                            cpuLimit,
+                            pollSec,
+                            tag,
+                            status
+                        ));
+                    }
+
+                    Console.WriteLine(string.Format("[{0}] [{1}] NVMe: {2}°C | Chassis: {3}°C (Δ {4}°C) | CPU: {5}% | {6}",
+                        DateTime.Now.ToString("HH:mm:ss"),
+                        tag,
+                        nvmeTemp,
+                        chassisTemp,
+                        deltaT,
+                        cpuLimit,
+                        status
+                    ));
+                }
+                catch { }
             }
         }
 
@@ -276,57 +424,17 @@ namespace NVMeThermal
                 if (File.Exists(CONTROL_FILE))
                 {
                     string text = File.ReadAllText(CONTROL_FILE).Trim();
-                    int overrideVal;
-                    if (int.TryParse(text, out overrideVal) && overrideVal >= 40 && overrideVal <= 100)
+                    int overrideCeiling;
+                    if (int.TryParse(text, out overrideCeiling))
                     {
-                        maxCeiling = overrideVal;
-                        Console.WriteLine("[" + DateTime.Now.ToString("HH:mm:ss") + "] Received Control Override: Max Ceiling = " + maxCeiling + "%");
+                        if (overrideCeiling >= 50 && overrideCeiling <= 100 && overrideCeiling != maxCpuCeiling)
+                        {
+                            maxCpuCeiling = overrideCeiling;
+                            Console.WriteLine("[" + DateTime.Now.ToString("HH:mm:ss") + "] [CONTROL] Max CPU Ceiling Updated: " + maxCpuCeiling + "%");
+                        }
                     }
                     File.Delete(CONTROL_FILE);
                 }
-            }
-            catch { }
-        }
-
-        private static void WriteStateJson(DateTime now, int nvmeTemp, int chassisTemp, int deltaT, int cpu, int ceiling, string stateTag, string status, int dwell, int penalty, int poll)
-        {
-            try
-            {
-                string json = string.Format(
-                    "{{\n  \"timestamp\": \"{0}\",\n  \"nvmeTempC\": {1},\n  \"chassisTempC\": {2},\n  \"thermalDelta\": {3},\n  \"temperatureC\": {1},\n  \"cpuLimitPercent\": {4},\n  \"maxCeiling\": {5},\n  \"stateTag\": \"{6}\",\n  \"status\": \"{7}\",\n  \"dwellElapsed\": {8},\n  \"dwellRemaining\": {9},\n  \"probePenaltyRemaining\": {10},\n  \"pollIntervalSec\": {11}\n}}",
-                    now.ToString("yyyy-MM-dd HH:mm:ss"),
-                    nvmeTemp,
-                    chassisTemp,
-                    deltaT,
-                    cpu,
-                    ceiling,
-                    stateTag,
-                    status,
-                    dwell,
-                    Math.Max(0, DWELL_SECONDS - dwell),
-                    penalty,
-                    poll
-                );
-
-                string tmpFile = STATE_FILE + ".tmp";
-                File.WriteAllText(tmpFile, json, Encoding.UTF8);
-                if (File.Exists(STATE_FILE)) { File.Delete(STATE_FILE); }
-                File.Move(tmpFile, STATE_FILE);
-            }
-            catch { }
-        }
-
-        private static void AppendDailyLog(DateTime now, int nvmeTemp, int chassisTemp, int deltaT, int cpu, int poll, string stateTag, string status)
-        {
-            try
-            {
-                string logFile = Path.Combine(LOG_DIR, "nvme_thermal_" + now.ToString("yyyy-MM-dd") + ".csv");
-                if (!File.Exists(logFile))
-                {
-                    File.WriteAllText(logFile, "Timestamp,NVMeTempC,ChassisTempC,DeltaT,CpuLimitPercent,PollIntervalSec,StateTag,Status\n", Encoding.UTF8);
-                }
-                string line = string.Format("{0},{1},{2},{3},{4},{5},{6},{7}\n", now.ToString("yyyy-MM-dd HH:mm:ss"), nvmeTemp, chassisTemp, deltaT, cpu, poll, stateTag, status);
-                File.AppendAllText(logFile, line, Encoding.UTF8);
             }
             catch { }
         }
@@ -335,15 +443,16 @@ namespace NVMeThermal
         {
             try
             {
-                DateTime cutoff = DateTime.Now.AddDays(-LOG_RETENTION_DAYS);
-                string[] files = Directory.GetFiles(LOG_DIR, "nvme_thermal_*.csv");
-                foreach (string f in files)
+                if (Directory.Exists(LOG_DIR))
                 {
-                    FileInfo fi = new FileInfo(f);
-                    if (fi.CreationTime < cutoff && fi.LastWriteTime < cutoff)
+                    DateTime cutoff = DateTime.Now.AddDays(-7);
+                    foreach (string file in Directory.GetFiles(LOG_DIR, "nvme_thermal_*.csv"))
                     {
-                        File.Delete(f);
-                        Console.WriteLine("Purged expired log file: " + fi.Name);
+                        FileInfo fi = new FileInfo(file);
+                        if (fi.LastWriteTime < cutoff)
+                        {
+                            fi.Delete();
+                        }
                     }
                 }
             }
