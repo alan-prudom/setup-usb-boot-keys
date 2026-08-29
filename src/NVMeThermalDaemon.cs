@@ -146,9 +146,7 @@ namespace NVMeThermal
                 }
                 else
                 {
-                    // Predictive Check: If chassis air is hot (>38 C), prevent probe up to prevent heat soak
                     bool chassisHot = (currentChassis >= 38);
-
                     int targetMax = (currentNvme <= 50 && !chassisHot) ? maxCeiling : Math.Min(maxCeiling, 70);
                     stateTag = (currentNvme <= 50) ? ("OPTIMAL " + currentCpuLimit + "%") : ("SUSTAINED " + currentCpuLimit + "%");
 
@@ -207,10 +205,18 @@ namespace NVMeThermal
                 psi.CreateNoWindow = true;
                 using (System.Diagnostics.Process p = System.Diagnostics.Process.Start(psi))
                 {
-                    string outStr = p.StandardOutput.ReadToEnd().Trim();
-                    p.WaitForExit(2000);
-                    int t;
-                    if (int.TryParse(outStr, out t) && t > 0 && t < 120) return t;
+                    string outStr = p.StandardOutput.ReadToEnd();
+                    p.WaitForExit(3000);
+                    
+                    string[] tokens = outStr.Split(new char[] { '\r', '\n', ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                    foreach (string token in tokens)
+                    {
+                        int val;
+                        if (int.TryParse(token, out val) && val > 20 && val < 120)
+                        {
+                            return val;
+                        }
+                    }
                 }
             }
             catch { }
