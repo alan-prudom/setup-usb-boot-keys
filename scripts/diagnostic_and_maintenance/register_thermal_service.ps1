@@ -1,12 +1,12 @@
 <#
 .SYNOPSIS
     Registers the NVMe Thermal Governor as an Unattended 24/7 Background System Task
-    and adds the System Tray App to User Startup.
+    and adds the Python Web Dashboard to User Startup.
 .DESCRIPTION
     1. Creates Windows Scheduled Task "NVMeThermalGovernor" running bin/NVMeThermalDaemon.exe
        at machine startup under NT AUTHORITY\SYSTEM with Highest privileges.
-    2. Adds NVMeThermalTray to HKCU:\Software\Microsoft\Windows\CurrentVersion\Run for automatic
-       taskbar icon and desktop notifications on user login.
+    2. Adds NVMeThermalWeb (uv run nvme_web.py) to HKCU:\Software\Microsoft\Windows\CurrentVersion\Run
+       for windowless automatic web dashboard on user login (Port 8899).
 #>
 
 [CmdletBinding()]
@@ -16,7 +16,7 @@ param(
 
 $repo = "D:\Github\ap-devices-and-pcs\devices\setup-usb-boot-keys"
 $daemonExe = Join-Path $repo "bin\NVMeThermalDaemon.exe"
-$trayExe = Join-Path $repo "bin\NVMeThermalTray.exe"
+$webVbs = Join-Path $repo "scripts\diagnostic_and_maintenance\nvme_web_startup.vbs"
 $taskName = "NVMeThermalGovernor"
 $runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 
@@ -24,6 +24,7 @@ if ($Unregister) {
     Write-Host "=== Unregistering NVMe Thermal Auto-Start Services ===" -ForegroundColor DarkYellow
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
     Remove-ItemProperty -Path $runKey -Name "NVMeThermalTray" -ErrorAction SilentlyContinue
+    Remove-ItemProperty -Path $runKey -Name "NVMeThermalWeb" -ErrorAction SilentlyContinue
     Write-Host "Auto-start services successfully unregistered." -ForegroundColor DarkGreen
     return
 }
@@ -52,13 +53,16 @@ if (Test-Path $daemonExe) {
     Write-Host "[ERROR] Daemon binary not found at $daemonExe" -ForegroundColor DarkRed
 }
 
-# 2. Register User Login Tray App
-Write-Host "[2/2] Registering System Tray App in User Startup (HKCU Run)..." -ForegroundColor DarkYellow
-if (Test-Path $trayExe) {
-    Set-ItemProperty -Path $runKey -Name "NVMeThermalTray" -Value "`"$trayExe`"" -Force
-    Write-Host "  -> HKCU Run entry 'NVMeThermalTray' configured successfully." -ForegroundColor DarkGreen
+# 2. Register Python Web Server in User Startup (Avast-Safe)
+Write-Host "[2/2] Registering Python Web Dashboard in User Startup (HKCU Run)..." -ForegroundColor DarkYellow
+# Clean old C# Tray entry
+Remove-ItemProperty -Path $runKey -Name "NVMeThermalTray" -ErrorAction SilentlyContinue
+
+if (Test-Path $webVbs) {
+    Set-ItemProperty -Path $runKey -Name "NVMeThermalWeb" -Value "wscript.exe `"$webVbs`"" -Force
+    Write-Host "  -> HKCU Run entry 'NVMeThermalWeb' configured successfully (Port 8899)." -ForegroundColor DarkGreen
 } else {
-    Write-Host "  -> Note: Tray binary not found at $trayExe" -ForegroundColor DarkYellow
+    Write-Host "  -> Note: Web runner script not found at $webVbs" -ForegroundColor DarkYellow
 }
 
 Write-Host "----------------------------------------------------------" -ForegroundColor DarkGray
