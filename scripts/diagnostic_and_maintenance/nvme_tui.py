@@ -7,6 +7,7 @@
 # ///
 
 import os
+import sys
 import json
 import time
 from datetime import datetime
@@ -16,6 +17,7 @@ from rich.layout import Layout
 from rich.table import Table
 from rich.text import Text
 from rich.live import Live
+from rich import box
 
 STATE_FILE = r"D:\nvme_state.json"
 CONTROL_FILE = r"D:\nvme_control.json"
@@ -25,11 +27,15 @@ console = Console()
 def read_state():
     if not os.path.exists(STATE_FILE):
         return None
-    try:
-        with open(STATE_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return None
+    for _ in range(3):
+        try:
+            with open(STATE_FILE, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+                if content.startswith("{") and content.endswith("}"):
+                    return json.loads(content)
+        except Exception:
+            time.sleep(0.05)
+    return None
 
 def set_ceiling_override(val: int):
     try:
@@ -42,17 +48,18 @@ def generate_dashboard(data):
     layout = Layout()
     layout.split_column(
         Layout(name="header", size=3),
-        Layout(name="main", size=12),
+        Layout(name="main", size=13),
         Layout(name="footer", size=3)
     )
 
     # Header
-    header_text = Text("🛡️  Dual-Sensor Predictive NVMe Thermal Governor & Monitor", style="bold cyan")
-    header_panel = Panel(header_text, style="cyan", subtitle=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    header_text = Text(" NVMe Dual-Sensor Predictive Thermal Governor & Live Monitor", style="bold cyan")
+    header_panel = Panel(header_text, style="cyan", subtitle=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), box=box.ROUNDED)
     layout["header"].update(header_panel)
 
     if not data:
-        layout["main"].update(Panel("[yellow]Waiting for Daemon State Snapshot (D:\\nvme_state.json)...[/yellow]", title="State"))
+        layout["main"].update(Panel("[yellow]Waiting for Daemon State Snapshot (D:\\nvme_state.json)...[/yellow]", title="State", box=box.ROUNDED))
+        layout["footer"].update(Panel(Text("Controls: [Ctrl+C] Exit", style="dim"), box=box.ROUNDED))
         return layout
 
     nvme_temp = data.get("nvmeTempC", data.get("temperatureC", 0))
@@ -75,37 +82,37 @@ def generate_dashboard(data):
     else:
         nvme_style = "bold green"
 
-    # Main Grid
-    table = Table(expand=True, box=None)
+    # Main Telemetry Table
+    table = Table(expand=True, box=box.SIMPLE_HEAVY)
     table.add_column("Sensor / Domain", justify="left", style="bold white")
     table.add_column("Reading", justify="center")
     table.add_column("Thermal Trajectory & Status Bar", justify="left")
 
     # NVMe Controller Die Row
     nvme_bar = "█" * int(min(20, max(1, (nvme_temp - 30) / 1.5)))
-    table.add_row("🌡️ NVMe Controller Die", f"[{nvme_style}]{nvme_temp} °C[/{nvme_style}]", f"[{nvme_style}]{nvme_bar}[/{nvme_style}] (Limit: 55°C)")
+    table.add_row("NVMe Controller Die", f"[{nvme_style}]{nvme_temp} °C[/{nvme_style}]", f"[{nvme_style}]{nvme_bar}[/{nvme_style}] (Floor Safe <= 50°C | Limit 55°C)")
 
     # Chassis ACPI Zone Row
     chassis_bar = "█" * int(min(20, max(1, chassis_temp / 2.5)))
     chassis_style = "bold yellow" if chassis_temp >= 38 else "bold blue"
-    table.add_row("🌀 Chassis ACPI Zone", f"[{chassis_style}]{chassis_temp} °C[/{chassis_style}]", f"[{chassis_style}]{chassis_bar}[/{chassis_style}] (Heat Soak Ceiling: 38°C)")
+    table.add_row("Chassis ACPI Zone", f"[{chassis_style}]{chassis_temp} °C[/{chassis_style}]", f"[{chassis_style}]{chassis_bar}[/{chassis_style}] (Airflow Soak Ceiling: 38°C)")
 
     # Thermal Delta Gradient
-    table.add_row("📐 Thermal Gradient (ΔT)", f"[bold cyan]{delta_t} °C[/bold cyan]", f"Die-to-Ambient Dissipation: [green]{'EFFICIENT' if delta_t >= 8 else 'SATURATED'}[/green]")
+    table.add_row("Thermal Gradient (ΔT)", f"[bold cyan]{delta_t} °C[/bold cyan]", f"Die-to-Ambient Dissipation: [green]{'EFFICIENT' if delta_t >= 8 else 'SATURATED'}[/green]")
 
     # CPU Power Limit Row
     cpu_bar = "█" * int(cpu / 5)
-    table.add_row("⚡ CPU Power Throttle", f"[bold cyan]{cpu} %[/bold cyan]", f"[cyan]{cpu_bar}[/cyan] (Max: {ceiling}%)")
+    table.add_row("CPU Power Throttle", f"[bold cyan]{cpu} %[/bold cyan]", f"[cyan]{cpu_bar}[/cyan] (Locked Ceiling: {ceiling}%)")
 
     # Governor State & Dwell
     dwell_str = f"{dwell}s remaining" if dwell > 0 else "Ready"
-    table.add_row("🏷️ Governor State", f"[bold yellow]{state_tag}[/bold yellow]", f"Status: [white]{status}[/white] | Dwell: [green]{dwell_str}[/green] | Penalty: [magenta]{penalty}s[/magenta]")
+    table.add_row("Governor State", f"[bold yellow]{state_tag}[/bold yellow]", f"Status: [white]{status}[/white] | Dwell: [green]{dwell_str}[/green] | Penalty: [magenta]{penalty}s[/magenta]")
 
-    layout["main"].update(Panel(table, title="[bold]Real-Time Predictive Telemetry[/bold]", border_style="blue"))
+    layout["main"].update(Panel(table, title="[bold]Real-Time Predictive Telemetry[/bold]", border_style="blue", box=box.ROUNDED))
 
     # Footer Controls
-    footer_text = Text("Controls: [7] Set 70% Max  |  [8] Set 80% Max  |  [9] Set 90% Max  |  [Ctrl+C] Exit", style="dim")
-    layout["footer"].update(Panel(footer_text, style="dim"))
+    footer_text = Text("Controls: [7] Set 70% Max  |  [8] Set 80% Max  |  [9] Set 90% Max  |  [Ctrl+C] Exit", style="bold cyan")
+    layout["footer"].update(Panel(footer_text, style="dim", box=box.ROUNDED))
 
     return layout
 
