@@ -1,4 +1,4 @@
-﻿# Windows 11 Unexpected Reboot Investigation & System State Audit
+# Windows 11 Unexpected Reboot Investigation & System State Audit
 
 **System**: HP ZBook 15u G5 (`AP-HP-G5` / `alan-USB-g5`)
 **Investigated Period**: July 31 - August 28, 2026
@@ -457,6 +457,66 @@ Total reclaimed: ~42.4 GB
   After:  AutomaticManagedPagefile True - Windows manages size dynamically
 
 ### Volume Shadow Copy Storage
+---
+
+## 3.12 Overnight Investigation: Crashes 19 & 20 (August 29, 2026)
+
+Following successful verification of the 5% adaptive governor during the afternoon archiving of Ubuntu 16 (which compressed 8.78 GB into 3.08 GB with 0 crashes at 52°C), the user's interactive SSH session closed at 23:52. 
+
+Because the governor was running interactively in that terminal, the process terminated with the session. Windows power management returned to default **100% Turbo Boost**. During unattended overnight scheduled maintenance (Search indexing and cloud sync), the unthrottled CPU surged, heat-soaking the NVMe controller and causing two unexpected reboots:
+
+| Timestamp | Event ID | Bugcheck | Hex | Name | Parameter 1 | Context / Mechanism |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **08/29/2026 01:11:51** | 41 | 340 | `0x154` | `UNEXPECTED_STORE_EXCEPTION` | `0xffffab8ef548e000` | Unthrottled 100% CPU boost during overnight maintenance caused NVMe controller latency timeout. |
+| **08/29/2026 01:21:00** | 41 | 239 | `0xEF` | `CRITICAL_PROCESS_DIED` | `0xffffd90f3d1d2140` | Windows service host process died following prior store corruption 10 minutes earlier. |
+
+**Key Diagnostic Proof**: When the governor ran, the system was 100% stable during multi-gigabyte disk writes. When the governor stopped upon terminal exit, the machine crashed twice overnight. This proved the requirement for an **unattended 24/7 background service**.
+
+---
+
+## 3.13 Dual-Sensor Predictive Thermal Architecture & Modular Suite
+
+To eliminate overnight crashes and achieve zero-overhead background operation, the system was evolved into a modular 3-tier architecture:
+
+### 1. Dual-Sensor Thermodynamic Gradient (ΔT)
+Rather than reacting solely to the NVMe silicon temperature (which has high thermal inertia and lags CPU heat generation), the governor tracks both:
+* **Sensor 1 (NVMe Controller Die)**: Queried via `StorageReliabilityCounter` (`42°C – 64°C`, lagging indicator).
+* **Sensor 2 (Chassis ACPI Airflow Zone)**: Queried via `root/wmi:MSAcpi_ThermalZoneTemperature` (`30°C – 42°C`, leading indicator).
+* **Predictive Gradient ($\Delta T = T_{\text{NVMe}} - T_{\text{Chassis}}$)**: If Chassis temperature reaches $\ge 38^\circ\text{C}$, upward CPU probing is inhibited to prevent heat soak before the SSD can overheat.
+
+### 2. Implementation Suite Components
+* **Background Daemon (`src/NVMeThermalDaemon.cs` -> `bin/NVMeThermalDaemon.exe`)**:
+  * Compiled native C# binary (12 MB RAM, <0.05% CPU).
+  * Direct Win32 `powrprof.dll` P/Invoke (`PowerWriteACValueIndex`) — zero child process spawning overhead.
+  * Emits `D:\nvme_state.json` atomic state snapshot every second.
+  * State-change-only daily CSV logging in `D:\logs\nvme_thermal_YYYY-MM-DD.csv` with automated 7-day retention purging.
+* **Remote Web Dashboard (`scripts/diagnostic_and_maintenance/nvme_web.py`)**:
+  * Lightweight Python web server running via `uv` on port `8899` (smart fallback to 8088/9090).
+  * High-contrast Light Mode default with interactive Dark/Light theme toggle switch.
+  * Accessible remotely from MacBook Air via Tailscale (`http://100.127.153.93:8899`).
+* **Terminal TUI Dashboard (`scripts/diagnostic_and_maintenance/nvme_tui.py`)**:
+  * Interactive Rich/Textual terminal dashboard runnable via `uv`.
+  * Strict column vertical alignment and high-contrast light mode palette.
+
+---
+
+## 4. Hardware State Baseline
+
+### CPU & Thermal Specs:
+* **CPU**: Intel Core i7-8550U (4 Cores, 8 Threads, 1.80 GHz base, 4.0 GHz Boost, 15W TDP / 25W cTDP Up)
+* **RAM**: 16 GB DDR4-2400 (Single Channel, 1x16GB Micron, 1 slot open)
+* **Primary NVMe SSD**: Samsung MZVLB512HAJQ-000H1 (PM981, 512GB, PCIe 3.0 x4)
+* **SMART Status**: 0 Critical Warnings, 0 Available Spare violations, 100% Healthy.
+
+---
+
+## 5. System Configuration Changes (Summary)
+
+### Pagefile
+  Before: Hard-capped at 1,000 MB
+  After:  System-managed (Currently dynamic 2.5 - 8 GB on C:)
+
+### VSS Shadow Storage
   Before: User-imposed limit causing Volsnap Event 36 I/O abort
   After:  vssadmin resize shadowstorage /for=C: /on=C: /maxsize=10GB
 
@@ -464,55 +524,45 @@ Total reclaimed: ~42.4 GB
   Before: AvastCleanupSvc Auto-start, holding registry locks, background disk I/O
   After:  sc stop AvastCleanupSvc && sc config AvastCleanupSvc start= disabled
 
-### Hibernation
-  Before: Enabled (hiberfil.sys consuming 10-15 GB on C:)
-  After:  powercfg /h off
+### WSL2 Resource Capping
+  Before: Uncapped (consuming up to 8 GB RAM and 8 vCPUs)
+  After:  Capped to 4 GB RAM, 4 vCPUs, 2 GB swap via `configs/wsl/.wslconfig` (symlinked to `C:\Users\alanp\.wslconfig`).
 
 ### Tailscale
   Enabled unattended background start: tailscale.exe set --unattended
   VPN tunnel now available pre-login at 100.127.153.93
 
-### agy Command Wrapper
-  Created D:\Program Files\Python311\Scripts\agy.cmd
-  Created C:\nvm4w\nodejs\agy.cmd
-  Both wrap C:\Users\alanp\AppData\Local\agy\bin\agy.exe
-  Created PowerShell profile at C:\Users\alanp\Documents\PowerShell\profile.ps1
-
 ---
 
-## 6. Final Drive State (August 28, 2026)
+## 6. Final Drive State (August 29, 2026)
 
 | Volume | Letter | Total | Free Space | Status |
 | :--- | :--- | :--- | :--- | :--- |
 | Windows OS | C: | 216 GB | 17-19 GB | Healthy |
-| Data SSD | D: | 259.7 GB | ~22 GB | Healthy |
+| Data SSD | D: | 259.7 GB | ~22 GB (-> ~31 GB after Ubuntu16 purge) | Healthy |
 | SD Card | G: | 81 GB | ~45 GB | Healthy |
 
-C: free space varies as automatic pagefile dynamically sizes under load.
+---
+
+## 7. Remote Connectivity & Web Services
+
+| Method | Address | Service / Role |
+| :--- | :--- | :--- |
+| Local LAN SSH | ssh alanp@192.168.1.159 | Port 22 - Terminal access |
+| Tailscale VPN SSH | ssh alanp@100.127.153.93 | Port 22 - Remote terminal access |
+| Web Dashboard (LAN) | http://192.168.1.159:8899 | Thermal telemetry live web UI |
+| Web Dashboard (Tailscale) | http://100.127.153.93:8899 | Remote MacBook Air browser access |
 
 ---
 
-## 7. Remote Connectivity & SSH Access
+## 8. Outstanding Actions Status
 
-| Method | Address | Notes |
-| :--- | :--- | :--- |
-| Local LAN | ssh alanp@192.168.1.159 | Direct LAN access |
-| Tailscale VPN | ssh alanp@100.127.153.93 | Available pre-login after unattended fix |
-| OpenSSH service | sshd - Automatic, Port 22 | Running |
-| SSH warning | Post-quantum key exchange not supported | Non-critical, server upgrade recommended |
+| Action | Priority | Status | Notes |
+| :--- | :--- | :--- | :--- |
+| Archive D:\Ubuntu16 (8.78 GB) | High | **COMPLETED** | Compressed to `D:\Ubuntu16_archive.tar.gz` (3.08 GB). Ready to delete `D:\Ubuntu16`. |
+| Deploy 24/7 Background Task | High | Ready | Register `NVMeThermalDaemon.exe` in Task Scheduler at startup under `SYSTEM`. |
+| Replace NVMe M.2 thermal pad | Medium | Pending Hardware | Thermal pad replacement will restore passive dissipation under unthrottled boost. |
+| Run chkdsk C: /f (scheduled) | Medium | Pending Reboot | Confirm NTFS journal clean. |
+| Install Samsung Magician | Low | Optional | Full SMART baseline diagnostics. |
 
----
-
-## 8. Outstanding Actions
-
-| Action | Priority | Notes |
-| :--- | :--- | :--- |
-| Replace NVMe M.2 thermal pad | HIGH | Drive hitting 81C - remaining crash risk under heavy load |
-| Run chkdsk C: /f (scheduled) | Medium | Confirm NTFS journal clean after August 1 crash recovery |
-| Archive D:\Ubuntu16 (8.78 GB) | Medium | tar -czf D:\Ubuntu16_archive.tar.gz -C D:\ --exclude=Ubuntu16/fsserver Ubuntu16 then remove |
-| Install Samsung Magician | Medium | Get full SMART attribute baseline including Power-On Hours and Wear Level raw values |
-| Monitor D: free space | Medium | D: absorbed 24+ GB of junctions - now at ~22 GB free |
-| Upgrade OpenSSH server | Low | Eliminate post-quantum key exchange warning from SSH clients |
-| Reduce concurrent Firefox sessions | Low | 6 processes reached 3.3 GB RAM peak, drives heavy NVMe paging |
-| Consider Dropbox RAM/sync impact | Low | Dropbox using 1 GB RAM + active sync adds continuous NVMe I/O |
 

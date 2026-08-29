@@ -127,11 +127,19 @@ To maintain space on `C:` without breaking software dependencies, the following 
 3. `C:\Users\alanp\.vscode` $\rightarrow$ `D:\.vscode` (4.73 GB VS Code extensions)
 4. `C:\Users\alanp\AppData\Local\Docker` $\rightarrow$ `D:\Docker_AppData` (5.70 GB Docker container data)
 
+---
+
+## 8. Large Directory & Cache Audit (August 29, 2026)
+
+| Directory / File | Size | Purpose & Technical Format | Action / Optimization |
+| :--- | :--- | :--- | :--- |
+| **`D:\WUDownloadCache`** | **`7.74 GB`** | Windows Update Delivery Optimization & CBS Staging directory. Contains **Windows 11 24H2 Build 26100.2605 Cumulative Rollup Package** (`SetupDUCabs\Windows11.0-KB5047134-x64.cab`). | Usable for offline DISM servicing / USB slipstreaming on air-gapped PCs (`DISM /Online /Add-Package`). Safe to purge if not needed. |
+| **`D:\Ubuntu16_archive.tar.gz`** | **`3.08 GB`** | Gzip-compressed tar archive of legacy WSL1 Ubuntu 16 filesystem (recompressed from 8.78 GB uncompressed rootfs with 0 errors). | Verified intact. Ready to delete uncompressed `D:\Ubuntu16` folder to reclaim **8.78 GB** on `D:`. |
+| **`D:\Docker_AppData\wsl\disk\docker_data.vhdx`** | **`5.56 GB`** | WSL2 Docker virtual disk image stored on `D:`. Capped at 4GB RAM via `.wslconfig`. | Managed by WSL2. |
+
 > [!NOTE]
 > **Workstation Profile**: The **HP ZBook 15u G5** equipped with an **Intel Core i7-8550U** and **16 GB RAM** provides solid mobile workstation performance for development, software containerization, and multitasking.
 
-> [!CAUTION]
-> **Storage Bottleneck Warning**: Storage space on primary NVMe partitions (`/mnt/win_os` at **100%** and `/mnt/win_data` at **96%**) requires urgent space reallocation or cleanup to prevent write throttling or system instability.
-
 ---
 *Hardware Specification Document generated automatically by Antigravity AI.*
+

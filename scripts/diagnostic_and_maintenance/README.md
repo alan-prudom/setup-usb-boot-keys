@@ -1,13 +1,18 @@
-﻿# Diagnostic, Forensic & Maintenance Scripts
+# Diagnostic, Forensic & Maintenance Scripts
 
 This directory contains PowerShell and batch diagnostic scripts generated during the Windows 11 unexpected reboot investigation and system maintenance sessions on **AP-HP-G5 (HP ZBook 15u G5)**.
 
 ## Script Catalog
 
 ### Real-Time Protection & Hardware Safeguards
-| Script | Description |
+| Script / Binary | Description |
 | :--- | :--- |
-| [`nvme_thermal_watchdog.ps1`](nvme_thermal_watchdog.ps1) | **5% Adaptive Micro-Probe NVMe Thermal Governor**: Dynamically probes safe CPU power increments (+5%) with 30s stability gating, instant rollback on thermal rise, 60s probe penalty memory, and optional `-Aggressive` background I/O throttle. |
+| [`../../src/NVMeThermalDaemon.cs`](../../src/NVMeThermalDaemon.cs) | **Dual-Sensor Predictive NVMe Thermal Governor (C# Source)**: Native C# background daemon with direct Win32 `powrprof.dll` P/Invoke, dual-sensor polling (NVMe die + ACPI zone), `D:\nvme_state.json` atomic stream, and 7-day state-change daily CSV logging. |
+| [`../../bin/NVMeThermalDaemon.exe`](../../bin/NVMeThermalDaemon.exe) | **Compiled Native Daemon Binary**: 12 MB RAM footprint, <0.05% CPU, runs standalone or as a Windows Scheduled Task. |
+| [`nvme_web.py`](nvme_web.py) | **Python Micro Web Server (Port 8899 via `uv`)**: Serves responsive live HTML dashboard (Light mode default with interactive Dark/Light toggle) and `/api/state` for Safari on macOS. |
+| [`nvme_tui.py`](nvme_tui.py) | **Python Terminal TUI Dashboard (via `uv`)**: Interactive Rich/Textual terminal dashboard with strict column alignment, ASCII/Unicode gauges, and live $\Delta T$ gradient. |
+| [`nvme_thermal_watchdog.ps1`](nvme_thermal_watchdog.ps1) | **5% Adaptive Micro-Probe NVMe Thermal Governor (PowerShell)**: Standalone PowerShell implementation with `-MaxCpu` override and `-Aggressive` background I/O throttle. |
+
 
 ### Controlled Stress Testing & Thermal Verification
 | Script | Description |
