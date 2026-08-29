@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using System.Drawing;
 using System.Threading;
@@ -17,7 +18,7 @@ namespace NVMeThermal
         private NotifyIcon notifyIcon;
         private ContextMenuStrip contextMenu;
         private System.Windows.Forms.Timer pollTimer;
-        private HttpListener httpListener;
+        private TcpListener tcpListener;
         private Thread webThread;
         private int lastNotifiedCpu = -1;
 
@@ -65,8 +66,8 @@ namespace NVMeThermal
             pollTimer.Tick += (s, e) => RefreshState();
             pollTimer.Start();
 
-            // Start Embedded Micro Web Server
-            StartWebServer();
+            // Start Non-Elevated Pure TCP Web Server
+            StartTcpWebServer();
         }
 
         private void RefreshState()
@@ -138,46 +139,23 @@ namespace NVMeThermal
             catch { }
         }
 
-        private void StartWebServer()
+        private void StartTcpWebServer()
         {
             try
             {
-                httpListener = new HttpListener();
-                try
-                {
-                    httpListener.Prefixes.Add("http://*:" + WEB_PORT + "/");
-                }
-                catch
-                {
-                    httpListener.Prefixes.Clear();
-                    httpListener.Prefixes.Add("http://localhost:" + WEB_PORT + "/");
-                    httpListener.Prefixes.Add("http://127.0.0.1:" + WEB_PORT + "/");
-                }
-
-                try
-                {
-                    httpListener.Start();
-                }
-                catch
-                {
-                    // Fallback to pure localhost
-                    httpListener.Close();
-                    httpListener = new HttpListener();
-                    httpListener.Prefixes.Add("http://localhost:" + WEB_PORT + "/");
-                    httpListener.Prefixes.Add("http://127.0.0.1:" + WEB_PORT + "/");
-                    httpListener.Start();
-                }
+                tcpListener = new TcpListener(IPAddress.Any, WEB_PORT);
+                tcpListener.Start();
 
                 webThread = new Thread(() =>
                 {
-                    while (httpListener.IsListening)
+                    while (true)
                     {
                         try
                         {
-                            HttpListenerContext ctx = httpListener.GetContext();
-                            ThreadPool.QueueUserWorkItem((state) => HandleRequest(ctx));
+                            TcpClient client = tcpListener.AcceptTcpClient();
+                            ThreadPool.QueueUserWorkItem((state) => HandleTcpClient(client));
                         }
-                        catch { }
+                        catch { break; }
                     }
                 });
                 webThread.IsBackground = true;
@@ -185,32 +163,47 @@ namespace NVMeThermal
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Web server error: " + ex.Message);
+                Console.WriteLine("TCP Web server error: " + ex.Message);
             }
         }
 
-        private void HandleRequest(HttpListenerContext ctx)
+        private void HandleTcpClient(TcpClient client)
         {
             try
             {
-                string rawUrl = ctx.Request.RawUrl;
-                if (rawUrl.StartsWith("/api/state"))
+                using (NetworkStream stream = client.GetStream())
+                using (StreamReader reader = new StreamReader(stream, Encoding.UTF8))
+                using (StreamWriter writer = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = true })
                 {
-                    string json = File.Exists(STATE_FILE) ? File.ReadAllText(STATE_FILE, Encoding.UTF8) : "{}";
-                    byte[] data = Encoding.UTF8.GetBytes(json);
-                    ctx.Response.ContentType = "application/json";
-                    ctx.Response.OutputStream.Write(data, 0, data.Length);
+                    string reqLine = reader.ReadLine();
+                    if (string.IsNullOrEmpty(reqLine)) return;
+
+                    string[] parts = reqLine.Split(' ');
+                    string url = (parts.Length > 1) ? parts[1] : "/";
+
+                    if (url.StartsWith("/api/state"))
+                    {
+                        string json = File.Exists(STATE_FILE) ? File.ReadAllText(STATE_FILE, Encoding.UTF8) : "{}";
+                        byte[] body = Encoding.UTF8.GetBytes(json);
+                        writer.Write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: " + body.Length + "\r\nConnection: close\r\n\r\n");
+                        writer.Flush();
+                        stream.Write(body, 0, body.Length);
+                    }
+                    else
+                    {
+                        string html = GetDashboardHtml();
+                        byte[] body = Encoding.UTF8.GetBytes(html);
+                        writer.Write("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: " + body.Length + "\r\nConnection: close\r\n\r\n");
+                        writer.Flush();
+                        stream.Write(body, 0, body.Length);
+                    }
                 }
-                else
-                {
-                    string html = GetDashboardHtml();
-                    byte[] data = Encoding.UTF8.GetBytes(html);
-                    ctx.Response.ContentType = "text/html; charset=utf-8";
-                    ctx.Response.OutputStream.Write(data, 0, data.Length);
-                }
-                ctx.Response.Close();
             }
             catch { }
+            finally
+            {
+                try { client.Close(); } catch { }
+            }
         }
 
         private string GetDashboardHtml()
@@ -337,7 +330,7 @@ namespace NVMeThermal
         private void ExitApp()
         {
             pollTimer.Stop();
-            if (httpListener != null) { try { httpListener.Stop(); } catch { } }
+            if (tcpListener != null) { try { tcpListener.Stop(); } catch { } }
             notifyIcon.Visible = false;
             Application.Exit();
         }
