@@ -8,6 +8,13 @@ import sys
 import json
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
+# Force UTF-8 standard output for Windows console compatibility
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 STATE_FILE = r"D:\nvme_state.json"
 DEFAULT_PORTS = [8899, 8088, 9090, 8585, 8550]
 
@@ -119,10 +126,10 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <body>
     <div class='card'>
         <div class='header'>
-            <h1>🛡️ Dual-Sensor NVMe Governor</h1>
+            <h1>[SAFEGUARD] Dual-Sensor NVMe Governor</h1>
             <div class='header-controls'>
                 <span class='status-pill' id='stateTag'>Connecting...</span>
-                <button class='theme-btn' onclick='toggleTheme()' id='themeBtn'>🌙 Dark Mode</button>
+                <button class='theme-btn' onclick='toggleTheme()' id='themeBtn'>Dark Mode</button>
             </div>
         </div>
         <div class='gauge-container'>
@@ -154,7 +161,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         function applyTheme(theme) {
             document.documentElement.setAttribute('data-theme', theme);
             localStorage.setItem('nvme_theme', theme);
-            document.getElementById('themeBtn').innerText = (theme === 'light') ? '🌙 Dark Mode' : '☀️ Light Mode';
+            document.getElementById('themeBtn').innerText = (theme === 'light') ? 'Dark Mode' : 'Light Mode';
         }
         function toggleTheme() {
             const current = document.documentElement.getAttribute('data-theme') || 'light';
@@ -230,11 +237,11 @@ def run():
             continue
 
     if not server:
-        print("❌ Error: Could not bind to any candidate ports (8899, 8088, 9090, 8585).")
+        print("[ERROR] Could not bind to candidate ports (8899, 8088, 9090, 8585).")
         sys.exit(1)
 
-    print(f"🛡️  NVMe Thermal Web Dashboard running at http://localhost:{active_port}")
-    print(f"🌐 Remote access via Tailscale: http://100.127.153.93:{active_port}")
+    print(f"[OK] NVMe Thermal Web Dashboard running at http://localhost:{active_port}")
+    print(f"[URL] Remote access via Tailscale: http://100.127.153.93:{active_port}")
     server.serve_forever()
 
 if __name__ == "__main__":
