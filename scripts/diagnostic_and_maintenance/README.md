@@ -37,9 +37,11 @@ This directory contains PowerShell and batch diagnostic scripts generated during
 | [`set_automatic_system_pagefile.ps1`](set_automatic_system_pagefile.ps1) | Configures Windows Virtual Memory to `AutomaticManagedPagefile = True`, removing manual pagefile caps. |
 | [`verify_volsnap_and_drive_space.ps1`](verify_volsnap_and_drive_space.ps1) | Verifies Volume Shadow Copy storage status and drive free space after resizing. |
 | [`find_and_inspect_avast_services.ps1`](find_and_inspect_avast_services.ps1) | Inspects running Avast / TuneUp services and maps process IDs to service names. |
-| [`verify_system_memory_and_services.ps1`](verify_system_memory_and_services.ps1) | Audits top memory consumers, background services, NVMe SRB error rates, and drive free space. |
-| [`setup_powershell_ssh_profile.ps1`](setup_powershell_ssh_profile.ps1) | Creates user profile loaders to append PATH variables for remote SSH PowerShell sessions. |
-| [`agy_wrapper.cmd`](agy_wrapper.cmd) | Command wrapper to enable system-wide execution of `agy` across all users in `cmd.exe`. |
+### Bidirectional UEFI One-Time Boot Scripts
+| Script | Description |
+| :--- | :--- |
+| [`boot_to_linux.ps1`](boot_to_linux.ps1) | **Force One-Time UEFI Boot to Linux (Windows PowerShell)**: Queries UEFI NVRAM via `bcdedit /enum firmware`, programs `{fwbootmgr} bootsequence` to attached USB/Linux EFI partitions, or launches Windows Advanced Startup menu (`shutdown /r /o`). |
+| [`boot_to_windows.sh`](boot_to_windows.sh) | **Force One-Time UEFI Boot to Windows 11 (Linux Bash)**: Uses Linux `efibootmgr --bootnext` to dynamically locate `Windows Boot Manager` and set the one-time reboot sequence back to Windows 11. |
 
 ### Storage Reclamation & Directory Migrations
 | Script | Description |

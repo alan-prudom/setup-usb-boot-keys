@@ -108,3 +108,25 @@ Get-ScheduledTask NVMeThermalGovernor
 # Restart TightVNC service (if desktop ever needs re-hooking):
 Restart-Service tvnserver
 ```
+
+---
+
+## 7. Bidirectional UEFI One-Time Boot Commands
+
+To switch between Windows 11 and USB Linux programmatically without pressing BIOS keys:
+
+### A. Boot from Windows 11 $\rightarrow$ USB Linux:
+In Windows **Administrator PowerShell**:
+```powershell
+pwsh D:\Github\ap-devices-and-pcs\devices\setup-usb-boot-keys\scripts\diagnostic_and_maintenance\boot_to_linux.ps1
+```
+* Queries `bcdedit /enum firmware`, programs `{fwbootmgr} bootsequence` to the target USB Linux EFI entry, and reboots directly into Linux.
+* Or select **`[M]`** to enter the Windows Advanced Startup / UEFI Device Selection menu (`shutdown /r /o`).
+
+### B. Boot from Linux $\rightarrow$ Windows 11:
+In **Linux Bash** (on USB key):
+```bash
+sudo ./scripts/diagnostic_and_maintenance/boot_to_windows.sh
+```
+* Uses `efibootmgr --bootnext` to dynamically set the next boot target to `Windows Boot Manager` and restarts back into Windows 11.
+
