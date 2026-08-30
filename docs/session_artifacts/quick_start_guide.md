@@ -130,3 +130,25 @@ sudo ./scripts/diagnostic_and_maintenance/boot_to_windows.sh
 ```
 * Uses `efibootmgr --bootnext` to dynamically set the next boot target to `Windows Boot Manager` and restarts back into Windows 11.
 
+---
+
+## 8. Parallel Dual-SSH & Mosh Access (Port 22 vs. Port 2222)
+
+The system runs two distinct OpenSSH servers in parallel:
+
+| Connection Type | Port & Protocol | Target Environment | Key Benefit |
+| :--- | :--- | :--- | :--- |
+| **Native Windows OpenSSH** | **Port 22 (TCP)** | Windows PowerShell / CMD | Full Win32 administration, WMI, and services. |
+| **MSYS2 OpenSSH + Mosh** | **Port 2222 (TCP) + UDP 60000-61000** | MSYS2 POSIX Bash | **Sleep-proof, roamable, zero-lag typing** across Wi-Fi drops. |
+
+### To Connect from MacBook Air:
+* **Native PowerShell (Port 22)**: `ssh alanp@100.127.153.93`
+* **MSYS2 Bash (Port 2222)**: `ssh -p 2222 alanp@100.127.153.93`
+* **Mosh Session (Roamable)**: `mosh --ssh="ssh -p 2222" alanp@100.127.153.93`
+
+### To Verify Dual-SSH & Mosh Status on Windows:
+```powershell
+pwsh D:\Github\ap-devices-and-pcs\devices\setup-usb-boot-keys\scripts\diagnostic_and_maintenance\verify_msys2_sshd_and_mosh.ps1
+```
+
+
