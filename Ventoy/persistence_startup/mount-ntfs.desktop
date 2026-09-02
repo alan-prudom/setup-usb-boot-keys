@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Mount USB NTFS Storage
+Exec=/usr/local/bin/mount_ntfs_startup.sh
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true

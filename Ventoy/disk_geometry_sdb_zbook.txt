@@ -1,0 +1,52 @@
+# ==============================================================================
+# DISK & PARTITION GEOMETRY BLUEPRINT: HP ZBOOK & VENTOY USB
+# Captured: 2026-09-02
+# ==============================================================================
+
+### 1. BLOCK DEVICE OVERVIEW (/dev/sda & /dev/sdb)
+NAME     SIZE TYPE FSTYPE LABEL            UUID                                 MOUNTPOINT                              MODEL
+sda    953,9G disk                                                                                                      Crucial_CT1024M550SSD1
+├─sda1     1G part ntfs   SYSTEM           C4CAEDBFCAEDADBC                                                             
+├─sda2 203,9G part ntfs   Windows          7EBC40A7BC405BB1                                                             
+├─sda3     1K part                                                                                                      
+├─sda4     2G part vfat   HP_TOOLS         62F6-4ECB                                                                    
+├─sda5 426,2G part ntfs   data             3FCA0C373DD6CF32                                                             
+├─sda6  15,9G part swap                    74021678-f203-409a-bfff-33f767424b41                                         
+├─sda7   110G part ntfs   w10              1972EA420D316D38                                                             
+├─sda8   512M part vfat                    CFC2-2038                                                                    
+└─sda9 162,8G part ext4                    ef46ba23-9c38-4173-8722-22c0a54301a5                                         
+sdb    119,1G disk                                                                                                      SD/MMC
+├─sdb1    19G part exfat  Ventoy           4E21-0000                            /media/devmon/Ventoy                    
+├─sdb2    32M part vfat   VTOYEFI          223C-F3F8                            /media/devmon/VTOYEFI                   
+├─sdb3    19G part ext4   UbuntuUSB-Ventoy e0d8ad1a-410b-4245-9192-66d2a16077b9 /                                       
+└─sdb4    81G part ntfs                    2C95D29B2DF0500E                     /media/devmon/sdb4-usb-Generic-_SD_MMC_ 
+
+### 2. EXACT SFDISK PARTITION TABLES (Reproducible Sector Offsets)
+# --- /dev/sdb (128GB USB / SD-Card) ---
+label: dos
+label-id: 0x199e46a9
+device: /dev/sdb
+unit: sectors
+sector-size: 512
+
+/dev/sdb1 : start=        2048, size=    39887872, type=7, bootable
+/dev/sdb2 : start=    39889920, size=       65536, type=ef
+/dev/sdb3 : start=    39956480, size=    39792640, type=83
+/dev/sdb4 : start=    79749120, size=   169920512, type=7
+
+# --- /dev/sda (Internal 1TB SSD) ---
+label: dos
+label-id: 0x4d46b0f1
+device: /dev/sda
+unit: sectors
+sector-size: 512
+
+/dev/sda1 : start=        2048, size=     2099200, type=7, bootable
+/dev/sda2 : start=     2101248, size=   427642880, type=7
+/dev/sda3 : start=   433936384, size=  1566472192, type=5
+/dev/sda4 : start=   429744128, size=     4192256, type=b
+/dev/sda5 : start=   433938432, size=   893845504, type=7
+/dev/sda6 : start=  1967069184, size=    33339392, type=82
+/dev/sda7 : start=  1327785984, size=   230729728, type=7
+/dev/sda8 : start=  1558517760, size=     1048576, type=b
+/dev/sda9 : start=  1559568384, size=   341323776, type=83

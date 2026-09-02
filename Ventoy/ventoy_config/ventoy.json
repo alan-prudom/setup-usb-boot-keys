@@ -1,0 +1,14 @@
+{
+  "persistence": [
+    {
+      "image": "/rescuezilla-2.6.2-64bit.noble.iso",
+      "backend": "/rescuezilla-persistence.dat"
+    }
+  ],
+  "menu_alias": [
+    {
+      "image": "/supergrub2-classic-2.06s4-multiarch-CD.iso",
+      "alias": ">>> Super Grub2 Disk (Auto-Detect All OSes)"
+    }
+  ]
+}

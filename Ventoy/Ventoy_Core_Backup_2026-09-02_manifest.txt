@@ -1,0 +1,41 @@
+================================================================================
+BASELINE BACKUP MANIFEST: VENTOY CORE USB DRIVE (128GB)
+================================================================================
+
+Image Name        : Ventoy-USB-Ventoy-Core-2026-09-02-1638-img
+Execution Date    : 2026-09-02 16:38:00 - 17:22:12 UTC (Duration: ~44 minutes)
+Backup Engine     : Clonezilla Native CLI (ocs-sr / partclone)
+Source Drive      : /dev/sdb (128GB USB / SD-Card)
+Remote Host       : 192.168.1.34 (Server: home40)
+Remote Path       : /media/alan/home40/Clonezilla/Ventoy-USB-Ventoy-Core-2026-09-02-1638-img
+Total Size        : ~23 GB Compressed
+Execution Status  : COMPLETED SUCCESSFULLY (Exit Code: 0)
+
+PARTITIONS & COMPONENTS SAVED:
+--------------------------------------------------------------------------------
+1. Partition /dev/sdb1 (Ventoy Boot & ISO Partition):
+   - Filesystem   : exFAT (4E21-0000)
+   - Image Files  : sdb1.exfat-ptcl-img.gz.aa -> .ae (~17.6 GB total)
+   - Tool Used    : partclone.exfat
+
+2. Partition /dev/sdb2 (VTOYEFI Bootloader Partition):
+   - Filesystem   : FAT16 (223C-F3F8)
+   - Image Files  : sdb2.dd-ptcl-img.gz.aa (~1.5 GB raw block)
+   - Tool Used    : partclone.dd
+
+3. Partition /dev/sdb3 (Ubuntu-USB-Ventoy Installed Linux OS):
+   - Filesystem   : ext4 (UUID: e0d8ad1a-410b-4245-9192-66d2a16077b9)
+   - Image Files  : sdb3.ext4-ptcl-img.gz.aa & .ab (~4.0 GB total)
+   - Tool Used    : partclone.ext4
+
+4. Disk Geometry & Metadata:
+   - MBR Boot Code: sdb-mbr (512 bytes)
+   - Partition Map: sdb-pt.sf (sfdisk) & sdb-pt.parted (parted)
+   - Hidden Data  : sdb-hidden-data-after-mbr
+   - Clonezilla   : dev-fs.list, parts, clonezilla-img, Info-img-size.txt
+
+RESTORATION COMMAND (Via Clonezilla CLI):
+--------------------------------------------------------------------------------
+ocs-sr -g auto -e1 auto -e2 -r -j2 -p true restoreparts \
+    Ventoy-USB-Ventoy-Core-2026-09-02-1638-img sdb1 sdb2 sdb3
+================================================================================
