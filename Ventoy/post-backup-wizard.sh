@@ -283,3 +283,8 @@ while true; do
             ;;
     esac
 done
+
+echo ""
+read -n 1 -s -r -p "Wizard closed. Press any key to close this terminal..."
+echo ""
+

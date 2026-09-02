@@ -3,7 +3,7 @@ Version=1.0
 Type=Application
 Name=🚀 Run Backup Assistant (CLI)
 Comment=Automated Clonezilla & Rescuezilla Network Backup
-Exec=x-terminal-emulator -e sudo bash /home/ubuntu/ntfs_usb/run_rescuezilla_backup_cli.sh
+Exec=xfce4-terminal --title="🚀 Run Backup Assistant" --hold --geometry=105x32 -e "sudo bash /home/ubuntu/ntfs_usb/run_rescuezilla_backup_cli.sh"
 Icon=utilities-terminal
 Terminal=false
 StartupNotify=true

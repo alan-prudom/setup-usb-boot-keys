@@ -48,7 +48,7 @@ prompt_choice() {
     local max_val="$3"
     local choice=""
     while true; do
-        echo -en "${prompt_msg}"
+        echo -en "${prompt_msg}" >&2
         read -r choice
         choice="$(echo "$choice" | xargs)"
         if [ -z "$choice" ]; then
@@ -274,3 +274,9 @@ if prompt_yes_no "Run the Post-Backup Diagnostic Wizard now? (y/n): "; then
         bash "${SCRIPT_DIR}/post-backup-wizard.sh" "$LOG_FILE"
     fi
 fi
+
+# Pause before closing terminal window
+echo ""
+read -n 1 -s -r -p "Execution finished. Press any key to close this terminal..."
+echo ""
+

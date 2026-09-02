@@ -3,7 +3,7 @@ Version=1.0
 Type=Application
 Name=🛡️ Post-Backup Diagnostic Wizard
 Comment=Inspect backup logs and disk telemetry
-Exec=x-terminal-emulator -e sudo bash /home/ubuntu/ntfs_usb/post-backup-wizard.sh
+Exec=xfce4-terminal --title="🛡️ Post-Backup Wizard" --hold --geometry=105x32 -e "sudo bash /home/ubuntu/ntfs_usb/post-backup-wizard.sh"
 Icon=system-search
 Terminal=false
 StartupNotify=true
