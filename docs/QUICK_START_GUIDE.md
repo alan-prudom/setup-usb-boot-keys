@@ -151,4 +151,16 @@ The system runs two distinct OpenSSH servers in parallel:
 pwsh D:\Github\ap-devices-and-pcs\devices\setup-usb-boot-keys\scripts\diagnostic_and_maintenance\verify_msys2_sshd_and_mosh.ps1
 ```
 
+---
+
+## 9. HP ZBook 15u G5 Disaster Recovery & WSL Documentation
+
+Comprehensive recovery reports and storage audits for the HP ZBook 15u G5 are maintained in the [`docs/G5/`](G5/README.md) directory:
+
+* **[docs/G5/DETAILED_RECOVERY_REPORT.md](G5/DETAILED_RECOVERY_REPORT.md)** — Statement-by-statement report on recovering deleted WSL `ext4.vhdx` from a remote Clonezilla backup image over NAS (`192.168.1.34` on `/media/alan/home40`) using zero-disk-space sparse NBD architecture.
+* **[docs/G5/UBUNTU_RECOVERY_COMPLETE.md](G5/UBUNTU_RECOVERY_COMPLETE.md)** — Completion audit for WSL 2 Ubuntu restoration, VHDX header verification, filesystem checks, and relocation to `D:\WSL-distros\Ubuntu-24.04`.
+* **[docs/G5/REBOOT_STATE_CHECKPOINT.md](G5/REBOOT_STATE_CHECKPOINT.md)** — System pre-reboot checkpoint documenting WSL distributions, PC disk space metrics, and remote Linux NAS cleanup.
+* **[docs/G5/disk_space_audit.md](G5/disk_space_audit.md)** — Storage breakdown and disk space audit for the HP ZBook 15u G5.
+
+
 
