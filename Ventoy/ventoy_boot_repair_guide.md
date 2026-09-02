@@ -266,3 +266,76 @@ If you prefer using the graphical wizard instead of CLI:
 * **Destination:** `192.168.1.34:/media/alan/home40/Clonezilla/Ventoy-USB-Ventoy-Core-2026-09-02-1638-img/`
 * **Log:** [`backup_Ventoy-USB-Ventoy-Core-2026-09-02-1638-img.log`](file:///home/alan/ntfs_usb/backup_Ventoy-USB-Ventoy-Core-2026-09-02-1638-img.log)
 
+---
+
+## 14. Direct Boot Access from Ventoy (SuperGrub Alternative)
+
+Ventoy defaults to listing ISOs on Partition 1 and does not show installed OS partitions on the main screen. Two native methods bypass the need for SuperGrub:
+
+1. **Press `F6` (Custom Boot Menu):**
+   * Configured via `/ventoy/ventoy_grub.cfg` on `sdb1`.
+   * Directly provides:
+     * `🟢 Boot Installed Ubuntu 22.04 LTS (Ubuntu-USB-Ventoy on /dev/sdb3)`
+     * `🟢 Direct Linux Kernel Boot (Ubuntu 22.04 on /dev/sdb3)`
+     * `🪟 Boot Windows (Internal Disk /dev/sda)`
+2. **Press `F4` (Local Boot / Auto-Detect):**
+   * Built directly into Ventoy core.
+   * Scans all disks for `/boot/grub/grub.cfg` and Windows bootloader identically to SuperGrub without needing a separate rescue ISO.
+
+---
+
+## 15. Unique OS & Partition Labeling
+
+To eliminate ambiguity when multiple disks or OS installations are connected:
+
+* **GRUB Distributor String:** Updated in `/etc/default/grub` to:
+  ```text
+  GRUB_DISTRIBUTOR="Ubuntu-USB-Ventoy"
+  ```
+  Generates boot entries titled: `Ubuntu-USB-Ventoy GNU/Linux, with Linux 6.8.0-101-generic`.
+* **Ext4 Filesystem Label:** Applied to `/dev/sdb3` via `tune2fs -L "UbuntuUSB-Ventoy" /dev/sdb3`.  
+  *(Note: Formatted as `UbuntuUSB-Ventoy` to adhere strictly to the 16-character Linux ext4 superblock limit).*
+
+---
+
+## 16. Rescuezilla Live Persistence & Automated Startup Tasks
+
+### Root Cause of Previous Boot Hang
+Inspecting `rescuezilla-persistence.dat` with `e2fsck` revealed a **corrupted ext4 journal superblock**:
+```text
+Journal superblock is corrupt while checking journal for casper-rw
+e2fsck: Cannot proceed with file system check
+mount: wrong fs type, bad option, bad superblock
+```
+The live kernel deadlocked trying to recover the damaged loopback journal on boot.
+
+### New 512 MB Persistence Architecture
+1. **Clean Image:** Deployed verified 512 MB ext4 image at `/media/devmon/Ventoy/rescuezilla-persistence.dat`.
+2. **Auto-Mount Script (`/usr/local/bin/mount_ntfs_startup.sh`):**
+   * Runs via XDG Autostart on desktop load.
+   * Detects and mounts `/dev/sdb4` read-write at `/media/ubuntu/2C95D29B2DF0500E`.
+   * Creates symlinks at `~/ntfs_usb` and `~/Desktop/NTFS_Storage`.
+   * Secures `id_rsa` permissions to `600`.
+3. **Desktop Launchers:** Pre-loaded on the Live Desktop:
+   * `🚀 Run Backup Assistant (CLI)`
+   * `🛡️ Post-Backup Diagnostic Wizard`
+
+---
+
+## 17. System Clipboard Support
+
+To ensure CLI utilities (`gh`, tmux, scripts) can interact seamlessly with the clipboard in both graphical protocols, both providers are installed:
+* **X11:** `xclip` and `xsel`
+* **Wayland:** `wl-clipboard` (`wl-copy` / `wl-paste`)
+
+---
+
+## 18. Version-Controlled Artifacts Catalog
+
+Tracked in Git repository [`setup-usb-boot-keys`](https://github.com/alan-prudom/setup-usb-boot-keys) under [`Ventoy/`](file:///home/alan/mnt/zbook/files_g5/GitHub/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/):
+* `disk_geometry_sdb_zbook.txt`: Reproducible `sfdisk` sector boundaries and UUIDs for `/dev/sda` and `/dev/sdb`.
+* `Ventoy_Core_Backup_2026-09-02_manifest.txt`: Audit log and restoration commands for the 23 GB core backup.
+* `ventoy_config/`: USB partition 1 configuration files (`ventoy.json` and `ventoy_grub.cfg`).
+* `persistence_startup/`: Shell script and `.desktop` launchers installed inside the persistence overlay.
+
+
