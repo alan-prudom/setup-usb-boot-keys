@@ -1,180 +1,169 @@
-# Technical Session Notes: Ventoy F6 Boot, NTFS Mount Collision Diagnosis & Persistent Overlay Logging
+# Technical Session Notes: Ventoy F6 Boot, NTFS Mount Collision Diagnosis, Persistence Anatomy & Four-Tier Redundancy Architecture
 
 **Author / Session Lead**: Alan P & Assistant  
 **Date of Record**: September 3, 2026  
-**Target Machine**: HP ZBook 15u G5 (`alan-USB-g5`)  
-**Storage Architecture**: 128 GB Multi-Boot USB (`/dev/sdb`) & Internal 1 TB SSD (`/dev/sda`)  
-**Persistence Overlay**: 512 MB Ext4 Image (`/media/devmon/Ventoy/rescuezilla-persistence.dat`)  
-**Git Repository**: `setup-usb-boot-keys` (Branch: `main`)
+**Target Hardware**: HP ZBook 15u G5 (`alan-USB-g5`)  
+**Storage Environment**: 128 GB Multi-Boot USB (`/dev/sdb`) & Internal 1 TB NVMe/SATA SSD (`/dev/sda`)  
+**Persistence Overlay**: 512 MB Ext4 Container (`/media/devmon/Ventoy/rescuezilla-persistence.dat`)  
+**Sub-Repository**: `setup-usb-boot-keys` (Branch: `main`)
 
 ---
 
 ## 1. Core Discussion Points & Root Cause Investigations
 
 ### 1.1 F6 Direct Boot Validation
-* **Discussion Point:** The user confirmed: *"I was able to reboot into this ubuntu with F6."*
-* **Technical Analysis:**
-  * Previously, booting the installed Ubuntu 22.04 LTS on `/dev/sdb3` required booting SuperGrub, running an auto-detect scan, and manually picking the kernel.
-  * In this session, the custom Ventoy menu extension (`/ventoy/ventoy_grub.cfg`) loaded instantly via **`F6`**.
-  * The script searched for filesystem UUID `e0d8ad1a-410b-4245-9192-66d2a16077b9`, set `root`, and chainloaded `/boot/grub/grub.cfg`.
-  * **Result:** Confirmed reliable, 2-second direct boot into the installed Linux environment without any SuperGrub dependency.
+* **User Confirmation:** *"I was able to reboot into this ubuntu with F6."*
+* **Technical Significance:**
+  * Previously, booting the installed Ubuntu 22.04 LTS on `/dev/sdb3` required loading `supergrub2-classic-2.06s4-multiarch-CD.iso`, initiating an auto-detection scan, and manually selecting the kernel.
+  * In this session, pressing **`F6`** at the Ventoy boot menu instantly triggered `/ventoy/ventoy_grub.cfg`.
+  * The custom menu located UUID `e0d8ad1a-410b-4245-9192-66d2a16077b9` and chainloaded `/boot/grub/grub.cfg`, returning directly to the installed OS in under two seconds.
+  * **Status:** The SuperGrub dependency is completely eliminated for routine boots.
 
 ---
 
-### 1.2 The NTFS Mount Failure & "Funny State" Root Cause Analysis
-* **The Symptom:** The user reported: *"However the startup script did not mount the NTFS partition and left it in a funny state - I could not use disks to do it."*
-* **Investigation in the Persistence Image:**
-  * We loopback-mounted `rescuezilla-persistence.dat` and analyzed `/var/log/syslog` from the boot session at `2026-09-02 22:07:46`.
-  * **Key Syslog Finding:**
-    ```text
-    2026-09-02T22:07:48.287606+00:00 ubuntu udisksd[1991]: Cleaning up mount point /media/ubuntu/2C95D29B2DF0500E (device 8:20 is not mounted)
-    2026-09-02T22:07:56.706466+00:00 ubuntu systemd-xdg-autostart-generator[2348]: Configuration file /home/ubuntu/.config/autostart/mount-ntfs.desktop is marked executable.
-    ```
-* **The Chain of Events Leading to the Lockup:**
-  1. **Permission Failure:** The autostart entry (`mount-ntfs.desktop`) executes as user `ubuntu` (UID 1000). The startup script called `mkdir -p /media/ubuntu/2C95D29B2DF0500E`, which succeeded, but then executed `mount -t ntfs-3g ...` directly without `sudo`. Under Linux, unprivileged users are forbidden from calling the raw `mount` syscall (`mount: only root can use "--options" option`).
-  2. **Stale Directory Artifact:** The mount failed silently, but the empty folder `/media/ubuntu/2C95D29B2DF0500E` was left behind on the filesystem.
-  3. **UDisks2 Collision & Refusal:** When the user opened GNOME Disks and clicked "Mount", the desktop storage daemon (`udisksd`) attempted to mount `/dev/sdb4` to its standard path `/media/ubuntu/2C95D29B2DF0500E`. Finding an unmanaged, stale directory already present, UDisks entered a cleanup conflict state.
-  4. **The "Funny State":** GNOME Disks threw an error indicating the mount point was invalid or busy, preventing the user from mounting the drive graphically.
-
----
-
-### 1.3 The Desktop-Native UDisks2 Solution (`udisksctl`)
-* **Resolution Implemented:** Completely refactored `/usr/local/bin/mount_ntfs_startup.sh`.
-* **Key Architecture Change:** Replaced raw kernel `mount` with **`udisksctl mount -b "$NTFS_DEV"`**:
-  ```bash
-  UDISKS_OUT=$(udisksctl mount -b "$NTFS_DEV" 2>&1 || true)
-  ```
-* **Why this eliminates the issue:**
-  1. `udisksctl` communicates directly with `udisks2.service` over D-Bus.
-  2. In Ubuntu desktop sessions, Polkit grants the active console user (`ubuntu`) permission to mount removable storage without password prompts.
-  3. Because the mount is handled by UDisks itself, **GNOME Disks and PCManFM file manager immediately recognize the mount point natively**, preventing path conflicts, orphaned directories, and mutex locks.
-  4. If `udisksctl` reports the drive is already mounted, the script detects the active mount point from `lsblk` and simply refreshes the symlinks.
-
----
-
-### 1.4 Persistent Startup Logging Architecture
-* **Requirement:** User requested: *"Implement logging to the persistance partition of the start up sequence and any errorr messages."*
-* **Implementation:**
-  * Added global output stream redirection at the top of `mount_ntfs_startup.sh`:
+### 1.2 Direct Inspection of the Persistence Container (Anatomy & Loopback Mechanics)
+* **User Inquiry:** *"are you looking in the persistance image"*
+* **Technical Anatomy of `rescuezilla-persistence.dat`:**
+  * The file `/media/devmon/Ventoy/rescuezilla-persistence.dat` is a 512 MB ext4 filesystem image formatted with the volume label `casper-rw`.
+  * In Ubuntu live environments (Noble 24.04), Casper uses **OverlayFS** to merge the read-only ISO squashfs (`rofs`) with the persistence image.
+  * All persistent modifications across sessions are isolated in a directory named **`upper/`** inside this filesystem.
+* **Inspection Protocol Executed:**
+  * While booted in Ubuntu (`/dev/sdb3`), we mounted the container via a loopback device:
     ```bash
-    LOG_FILE="/var/log/startup_ntfs.log"
-    USER_LOG="/home/ubuntu/startup_ntfs.log"
-    exec > >(tee -a "$LOG_FILE" "$USER_LOG") 2>&1
+    sudo mkdir -p /mnt/rz_inspect
+    sudo mount -o loop /media/devmon/Ventoy/rescuezilla-persistence.dat /mnt/rz_inspect
     ```
-  * **Captured Telemetry:**
-    * Start timestamp and executing user ID (`whoami` / `id -u`).
-    * Block device discovery logs (`blkid`, `lsblk`).
-    * `udisksctl` stdout/stderr output.
-    * Fallback mount attempts if necessary.
-    * Symlink creation status (`~/ntfs_usb` and Desktop links).
-    * Final mount point validation and exit code.
-  * **Persistence Guarantee:** Because the root filesystem is backed by `rescuezilla-persistence.dat` via OverlayFS, both `/var/log/startup_ntfs.log` and `~/startup_ntfs.log` are permanently stored on flash and survive reboot.
+  * Inside `/mnt/rz_inspect/upper/`, we audited the exact live state from your session:
+    1. **Screenshots Saved by User:**
+       * `upper/home/ubuntu/Screenshot_2026-09-03_14-18-40.png` (22 KB)
+       * `upper/home/ubuntu/Screenshot_2026-09-03_14-19-45.png` (42 KB)
+    2. **Live Bash History (`upper/root/.bash_history`):** Documenting commands executed (`cd /media/ubuntu/2C95D29B2DF0500E/`, `./run_rescuezilla_backup_cli.sh`, `df -h`).
+    3. **Live System Logs (`upper/var/log/syslog`):** Documenting desktop startup and device interaction.
+  * **Hygiene:** Flushed buffers and unmounted the loop device before releasing to avoid filesystem corruption.
 
 ---
 
-### 1.5 Diagnostic System Journal Extraction
-* **Requirement:** User requested: *"Can you extract the recent system journal entries to that log file."*
-* **Implementation:**
-  * Extracted 1,622 lines from `/var/log/syslog` covering the boot session at `2026-09-02 22:07:46`.
-  * Compiled into a structured diagnostic report: [`rescuezilla_boot_2207_journal.log`](file:///home/alan/ntfs_usb/rescuezilla_boot_2207_journal.log).
-  * **Sections Included in Extract:**
-    1. Kernel boot parameters & CPU/RAM initialization.
-    2. Block device `/dev/sdb` SCSI registration (`sdb1`, `sdb2`, `sdb3`, `sdb4`).
-    3. `udisksd` daemon startup and mount point cleanup conflict logs.
-    4. XDG autostart generator execution trace for `mount-ntfs.desktop`.
-    5. Complete NTFS and storage device subsystem activity.
-  * **Locations Deployed:**
-    * Inside Rescuezilla: `/var/log/rescuezilla_boot_2207_journal.log` & `~/rescuezilla_boot_2207_journal.log`
-    * On USB NTFS partition: `/home/alan/ntfs_usb/rescuezilla_boot_2207_journal.log`
-    * In Git Sub-Repository: [`Ventoy/rescuezilla_boot_2207_journal.log`](file:///home/alan/mnt/zbook/files_g5/GitHub/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/rescuezilla_boot_2207_journal.log)
+### 1.3 The Prompt Explanation Mandate (User Directive)
+* **User Directive:** *"please explain the reasons behind why you are asking for each prompt. remember this instruction"*
+* **Core Behavioral Standard:** Whenever input, verification, or a choice is required from the user—whether in interactive CLI tools or in agent conversations—the technical rationale, operational context, and impact must be explicitly detailed *before* prompting.
+* **Implementation in `run_rescuezilla_backup_cli.sh`:**
+  * Every prompt displays an explicit `ℹ️ Why we ask this:` block:
+    * *Target Drive Prompt:* Explains the risk of confusing `/dev/sda` (Internal SSD) with `/dev/sdb` (USB stick).
+    * *Scope Selection Prompt:* Explains time and storage savings (Windows 11 OS partitions `sda1` + `sda2` vs. full 1TB disk).
+    * *Image Naming Prompt:* Explains preventing overwrite collisions and sanitizing spaces for network filesystems.
+    * *Engine Selection Prompt:* Explains Clonezilla native CLI (`ocs-sr`) reliability vs. experimental Rescuezilla Python CLI.
+    * *Confirmation Prompt:* Explains the magnitude of disk read/network write operations before execution.
+* **Conversational Policy:** When requesting human-in-the-loop (HITL) decisions, the agent outlines:
+  1. The technical context.
+  2. Why the decision cannot be made autonomously.
+  3. The specific consequences of each option.
 
 ---
 
-### 1.6 How to Access the Persistent Partition from the Rescuezilla Terminal
-* **Question Asked:** User requested: *"How can I access the persistant partition from the rescuezilla terminal"*
-* **Four Access Methods Documented:**
+### 1.4 Analysis of Screenshot 1 (`/dev/sdb1 already mounted or mount point busy`)
+* **Visual Evidence:** Screenshot `Screenshot_2026-09-03_14-18-40.png` shows GNOME Disks throwing:
+  > `Error mounting /dev/sdb1 at /media/ubuntu/Ventoy: /dev/sdb1 already mounted or mount point busy (udisks-error-quark, 0)`
+* **Root Cause:**
+  * In GNOME Disks, Partition 1 (`/dev/sdb1` - Ventoy, exFAT) was selected.
+  * `/dev/sdb1` is the active boot device that holds the live ISO file and `rescuezilla-persistence.dat`.
+  * The Linux kernel holds an exclusive lock on `/dev/sdb1` via loopback drivers (`/dev/loop0`).
+  * In Linux, an exFAT partition holding active loop mounts cannot be mounted a second time through UDisks.
+* **Key User Distinction:** The storage partition containing backups, scripts, and user data is **Partition 4 (`/dev/sdb4`)**, *not* Partition 1. Partition 1 is exclusively reserved for Ventoy bootloader files.
 
-#### Method 1: The Transparent Live Root (Standard Workflow)
-When booted with `rescuezilla-persistence.dat`, the persistence container is **already mounted as the root filesystem (`/`)**.
-* Anything created in `/home/ubuntu/`, `/etc/`, `/var/`, or `/usr/local/` is written directly into persistence.
-* View persistent logs immediately:
-  ```bash
-  cat /var/log/startup_ntfs.log
-  cat ~/startup_ntfs.log
+---
+
+### 1.5 Analysis of Screenshot 2 (`Child process exited normally with status 127`)
+* **Visual Evidence:** Screenshot `Screenshot_2026-09-03_14-19-45.png` shows the terminal window:
+  * Window Title: `🚀 Run Backup Assistant`
+  * Banner Message: `The child process exited normally with status 127. [Relaunch] [x]`
+* **Technical Significance:**
+  1. **Success of Window Persistence:** The window **did not abruptly disappear**. The `--hold` configuration kept the window open, preserving the error message for diagnostics.
+  2. **Root Cause of Status 127:** Status 127 in Linux signifies **"Command / File Not Found"**.
+  3. **Why the file was missing:**
+     * The desktop launcher ran: `sudo bash /home/ubuntu/ntfs_usb/run_rescuezilla_backup_cli.sh`.
+     * Rescuezilla runs **Openbox**, not GNOME or KDE. Openbox does *not* automatically parse XDG `.desktop` files in `~/.config/autostart/`.
+     * Because `mount-ntfs.desktop` was never triggered by Openbox, the symlink `/home/ubuntu/ntfs_usb` did not exist.
+     * When the desktop launcher clicked, bash reported that `/home/ubuntu/ntfs_usb/run_rescuezilla_backup_cli.sh` did not exist and exited with status 127.
+
+---
+
+### 1.6 The NTFS Mount Collision & "Funny State" Root Cause
+* **Visual Symptom:** User reported that the NTFS partition could not be mounted in Disks and was left in a "funny state".
+* **Syslog Finding:**
+  ```text
+  udisksd[1991]: Cleaning up mount point /media/ubuntu/2C95D29B2DF0500E (device 8:20 is not mounted)
   ```
+* **Failure Chain:**
+  1. An earlier script ran `mkdir -p /media/ubuntu/2C95D29B2DF0500E`, creating the directory.
+  2. It then executed raw `mount -t ntfs-3g ...` as unprivileged user `ubuntu` without `sudo`.
+  3. Unprivileged users cannot invoke the kernel `mount` syscall. The mount failed silently, leaving an orphaned directory behind.
+  4. When the user later clicked "Mount" in GNOME Disks, `udisksd` saw an existing directory on a device marked for cleanup and refused to mount, leaving the drive locked.
+* **Resolution:** Switched to **`udisksctl mount -b "$NTFS_DEV"`**. Desktop users have Polkit rights to mount removable storage without sudo, and UDisks manages the mount natively without path collisions.
 
-#### Method 2: Inspecting the Raw Overlay Delta (COW Layer)
-Casper OverlayFS mounts the read-write delta layer (files modified during persistent sessions) at:
-```bash
-ls -la /run/initramfs/cow/upper/
-# or
-ls -la /cow/upper/
+---
+
+## 2. The Four-Tier Redundancy Architecture Implemented
+
+To guarantee that clicking desktop launchers or running backup scripts can never fail with Status 127 or mount collisions, four layers of redundancy were deployed inside `rescuezilla-persistence.dat`:
+
 ```
-Inside `/run/initramfs/cow/upper/`, you can see the modified `/etc`, `/var`, `/home`, and `/usr` trees without the read-only squashfs underlying files.
-
-#### Method 3: Accessing the Base Ventoy USB Partition (`/dev/sdb1`)
-To access the underlying partition where `rescuezilla-persistence.dat` itself resides:
-```bash
-sudo mkdir -p /media/ventoy
-sudo mount /dev/sdb1 /media/ventoy
-ls -lh /media/ventoy/
-```
-
-#### Method 4: Accessing Persistence from Ubuntu (Booted via `F6`)
-Whenever booted in the installed Ubuntu environment on `/dev/sdb3`, loopback-mount the image:
-```bash
-sudo mkdir -p /mnt/rz_persist
-sudo mount -o loop /media/devmon/Ventoy/rescuezilla-persistence.dat /mnt/rz_persist
-ls -la /mnt/rz_persist/upper/
-sudo umount /mnt/rz_persist
++-------------------------------------------------------------------------------+
+|                      FOUR-TIER RESCUEZILLA ARCHITECTURE                        |
++-------------------------------------------------------------------------------+
+|  TIER 1: Embedded Root Binaries                                               |
+|          /usr/local/bin/run_rescuezilla_backup_cli.sh                         |
+|          /usr/local/bin/post-backup-wizard.sh                                 |
+|          -> 100% available on root overlay; 0 partition dependencies.         |
++-------------------------------------------------------------------------------+
+|  TIER 2: Self-Mounting Desktop Launchers                                      |
+|          Run_Backup_CLI.desktop & Post_Backup_Wizard.desktop                  |
+|          -> If ~/ntfs_usb missing, triggers mount on-demand; falls back to T1.|
++-------------------------------------------------------------------------------+
+|  TIER 3: Openbox-Native Autostart                                             |
+|          ~/.config/openbox/autostart & /etc/xdg/openbox/autostart             |
+|          -> Launches /usr/local/bin/mount_ntfs_startup.sh & on desktop draw.  |
++-------------------------------------------------------------------------------+
+|  TIER 4: System-Level Systemd Service                                         |
+|          /etc/systemd/system/mount-ntfs.service                               |
+|          -> Runs after udisks2.service; mounts storage before desktop loads.  |
++-------------------------------------------------------------------------------+
 ```
 
 ---
 
-### 1.7 Terminal Persistence & Stderr Redirection Fixes
-* **Investigation of Previous Crash (`diag2.md`):**
-  * `prompt_choice` in `run_rescuezilla_backup_cli.sh` previously printed to standard output, causing `scope_choice=$(prompt_choice ...)` to capture the prompt text and corrupt `$PARTITIONS_LIST` into an empty string.
-  * Python `rescuezillapy` crashed with `argument --partitions: expected at least one argument` (Exit code 2).
-  * Because the desktop launcher used `x-terminal-emulator -e ...`, the window closed instantaneously upon error.
-* **Fixes Verified:**
-  1. Redirected `prompt_choice` display to `stderr` (`echo -en "$prompt_msg" >&2`). Verified with dry-run test (options 1 & 2 populate `$PARTITIONS_LIST` cleanly).
-  2. Updated desktop launchers in persistence to use `xfce4-terminal --title="..." --hold --geometry=105x32`.
-  3. Added explicit terminal pause at the end of both `run_rescuezilla_backup_cli.sh` and `post-backup-wizard.sh`. Windows **never close abruptly**.
+## 3. Comprehensive File & Commit Register
 
----
-
-## 2. Comprehensive File & Commit Register
-
-| File Path | Description & Updates | Repositories & Partitions Synchronized | Git Commit |
+| File Path | Description & Architectural Purpose | Synchronized Targets | Git Commit |
 | :--- | :--- | :--- | :--- |
-| **`Ventoy/persistence_startup/Run_Backup_CLI.desktop`** | Self-mounting launcher: detects missing mount, triggers `mount_ntfs_startup.sh`, falls back to `/usr/local/bin/`. | Repo, `/media/devmon/Ventoy/rescuezilla-persistence.dat` (`/upper/home/ubuntu/Desktop/`). | `e9757c1` |
-| **`Ventoy/persistence_startup/Post_Backup_Wizard.desktop`** | Self-mounting diagnostic launcher with fallback execution. | Repo, `/media/devmon/Ventoy/rescuezilla-persistence.dat` (`/upper/home/ubuntu/Desktop/`). | `e9757c1` |
-| **`Ventoy/persistence_startup/mount-ntfs.service`** | System-level systemd service running after `udisks2.service` to mount NTFS before desktop loads. | Repo, `/media/devmon/Ventoy/rescuezilla-persistence.dat` (`/upper/etc/systemd/system/`). | `e9757c1` |
-| **`Ventoy/persistence_startup/mount_ntfs_startup.sh`** | Updated with `udisksctl` desktop-native mount and persistent dual logging (`/var/log/` & `~/`). | Repo, `/media/devmon/Ventoy/rescuezilla-persistence.dat` (`/upper/usr/local/bin/`). | `5ebfcfa` |
-| **`Ventoy/persistence_startup/README.md`** | Detailed guide on `mount_ntfs_startup.sh`, XDG autostart, and `--hold` window persistence. | Repo, secondary clone. | `4149f00` |
-| **`Ventoy/rescuezilla_boot_2207_journal.log`** | Extracted 1,622-line systemd journal trace diagnosing the UDisks mount point collision. | Repo, `/home/alan/ntfs_usb/`, `/media/devmon/Ventoy/rescuezilla-persistence.dat`. | `5ebfcfa` |
+| **`Ventoy/persistence_startup/Run_Backup_CLI.desktop`** | Self-mounting launcher: checks mount, triggers `mount_ntfs_startup.sh` on demand, falls back to `/usr/local/bin/`. | Repo, `/upper/home/ubuntu/Desktop/`. | `e9757c1` |
+| **`Ventoy/persistence_startup/Post_Backup_Wizard.desktop`** | Self-mounting diagnostic launcher with fallback execution. | Repo, `/upper/home/ubuntu/Desktop/`. | `e9757c1` |
+| **`Ventoy/persistence_startup/mount-ntfs.service`** | Systemd unit running after `udisks2.service` to mount NTFS before the desktop session starts. | Repo, `/upper/etc/systemd/system/`. | `e9757c1` |
+| **`Ventoy/persistence_startup/mount_ntfs_startup.sh`** | Updated with `udisksctl` desktop-native mount and dual persistent logging (`/var/log/` & `~/`). | Repo, `/upper/usr/local/bin/`. | `5ebfcfa` |
+| **`Ventoy/persistence_startup/README.md`** | Comprehensive documentation on persistence overlay files, autostart, and `--hold` terminal retention. | Repo, secondary clone. | `4149f00` |
+| **`Ventoy/rescuezilla_boot_2207_journal.log`** | Extracted 1,622-line systemd journal trace documenting the UDisks mount point collision. | Repo, `/home/alan/ntfs_usb/`, persistence overlay. | `5ebfcfa` |
 | **`Ventoy/run_rescuezilla_backup_cli.sh`** | Fixed `prompt_choice` stderr redirection, added exit holding pause, installed in `/usr/local/bin/`. | Repo, NTFS USB root, Ventoy partition, persistence `/usr/local/bin/`. | `91c3e90` |
 | **`Ventoy/post-backup-wizard.sh`** | Added exit holding pause on action `8`, installed in `/usr/local/bin/`. | Repo, NTFS USB root, Ventoy partition, persistence `/usr/local/bin/`. | `91c3e90` |
 | **`Ventoy/ventoy_boot_repair_guide.md`** | Updated Section 16 (UDisks fix), Section 18 (artifacts), and Section 19 (terminal access methods). | Repo, NTFS USB root, `docs/`, Ventoy partition, secondary clone. | `4149f00` |
-| **`/home/alan/ntfs_usb/Screenshot_2026-09-03_*.png`** | User screenshots showing Partition 1 exFAT busy error and Status 127 terminal holding window. | Preserved on USB NTFS Partition (`/dev/sdb4`). | Offline File |
+| **`Ventoy/session_technical_notes_2026-09-03.md`** | Master technical log covering prompt mandates, persistence anatomy, and four-tier architecture. | Repo, NTFS USB root, `docs/`, Ventoy partition, secondary clone. | `6dcd32e` |
+| **`/home/alan/ntfs_usb/Screenshot_2026-09-03_*.png`** | User screenshots showing Partition 1 busy modal and Status 127 terminal holding window. | Preserved on USB NTFS Partition (`/dev/sdb4`). | Offline File |
 | **`/media/devmon/Ventoy/rescuezilla-persistence.dat`** | Four-tier persistent environment: embedded scripts in `/usr/local/bin/`, Openbox autostart, systemd service. | Flash Partition `/dev/sdb1`. | Active Binary |
 
 ---
 
-## 3. Step-by-Step Verification Runbook
+## 4. Verification Runbook for Next Boot
 
 ### Testing the Updated Live Environment
 1. Insert the USB drive and reboot the HP ZBook.
-2. At the Ventoy menu, select `rescuezilla-2.6.2-64bit.noble.iso`.
-3. Select **`Boot with /rescuezilla-persistence.dat`**.
-4. Once the Openbox desktop loads:
-   * A desktop notification will appear: `"NTFS Storage Ready: Mounted at /media/ubuntu/2C95D29B2DF0500E"`.
+2. At the Ventoy menu, select **`rescuezilla-2.6.2-64bit.noble.iso`** -> **`Boot with /rescuezilla-persistence.dat`**.
+3. Once the desktop loads:
+   * A desktop notification will state: `"NTFS Storage Ready: Mounted at /media/ubuntu/2C95D29B2DF0500E"`.
    * Check the persistent log:
      ```bash
      cat ~/startup_ntfs.log
      ```
-   * Open GNOME Disks or PCManFM: `/dev/sdb4` will be cleanly mounted without errors or lockups.
-5. Double-click **`🚀 Run Backup Assistant (CLI)`**:
-   * The terminal will open in a clean 105x32 window.
-   * Select `[1] /dev/sda (Internal 1TB Drive)` -> `[1] Windows 11 Only: sda1 + sda2`.
-   * The terminal will remain open until you review the output and press a key.
+   * Notice that `/dev/sdb4` (Partition 4) is cleanly mounted and accessible via `~/ntfs_usb`.
+4. Double-click **`🚀 Run Backup Assistant (CLI)`**:
+   * The terminal will open in a 105x32 window.
+   * If storage was unmounted, it mounts it on demand; otherwise, it executes immediately.
+   * Pick `[1] /dev/sda (Internal 1TB Drive)` -> `[1] Windows 11 Only: sda1 + sda2` -> `[1] Clonezilla (ocs-sr)`.
+   * The window stays open after execution, holding all logs on screen.
