@@ -1,0 +1,34 @@
+{
+  "persistence": [
+    {
+      "image": "/rescuezilla-2.6.1-64bit.oracular.iso",
+      "backend": "/rescuezilla-persistence.dat"
+    },
+    {
+      "image": "/rescuezilla-2.6.2-64bit.noble.iso",
+      "backend": "/rescuezilla-persistence.dat"
+    }
+  ],
+  "menu_alias": [
+    {
+      "image": "/supergrub2-classic-2.06s4-multiarch-CD.iso",
+      "alias": ">>> Super Grub2 Disk (Auto-Detect All OSes)"
+    },
+    {
+      "image": "/gparted-live-1.6.0-10-amd64.iso",
+      "alias": ">>> GParted Live (Partition & Drive Manager)"
+    },
+    {
+      "image": "/clonezilla-live-3.2.0-5-amd64.iso",
+      "alias": ">>> Clonezilla Live (Disk Imaging CLI)"
+    },
+    {
+      "image": "/rescuezilla-2.6.1-64bit.oracular.iso",
+      "alias": ">>> Rescuezilla 2.6.1 Live GUI (+Persistence)"
+    },
+    {
+      "image": "/HBCD_PE_x64 2018.iso",
+      "alias": ">>> Hiren's BootCD PE x64 (Windows Rescue)"
+    }
+  ]
+}
