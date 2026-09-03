@@ -3,7 +3,7 @@ Version=1.0
 Type=Application
 Name=🛡️ Post-Backup Diagnostic Wizard
 Comment=Inspect backup logs and disk telemetry
-Exec=xfce4-terminal --title="🛡️ Post-Backup Wizard" --hold --geometry=105x32 -e "sudo bash /home/ubuntu/ntfs_usb/post-backup-wizard.sh"
+Exec=xfce4-terminal --title="🛡️ Post-Backup Wizard" --hold --geometry=105x32 -e "bash -c 'if [ ! -d /home/ubuntu/ntfs_usb ]; then echo \"Initializing storage...\"; sudo /usr/local/bin/mount_ntfs_startup.sh; fi; if [ -f /home/ubuntu/ntfs_usb/post-backup-wizard.sh ]; then sudo bash /home/ubuntu/ntfs_usb/post-backup-wizard.sh; else sudo bash /usr/local/bin/post-backup-wizard.sh; fi'"
 Icon=system-search
 Terminal=false
 StartupNotify=true
