@@ -338,4 +338,10 @@ Tracked in Git repository [`setup-usb-boot-keys`](https://github.com/alan-prudom
 * `ventoy_config/`: USB partition 1 configuration files (`ventoy.json` and `ventoy_grub.cfg`).
 * `persistence_startup/`: Shell script and `.desktop` launchers installed inside the persistence overlay.
 
+---
+
+## 19. Related Documentation & Operations Manuals
+
+* **[Comprehensive User Guide (`USER_GUIDE.md`)](file:///home/alan/GitHub/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/USER_GUIDE.md):** Unified manual covering BIOS Legacy boot, NTFS dirty-bit and read-write mounting, command-line backup automation, and error triage.
+* **[HP EliteBook Boot Summary (`boot.md`)](file:///home/alan/GitHub/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/boot.md):** Quick hardware summary and GRUB missing-module troubleshooting.
 
