@@ -1,14 +1,27 @@
-# Rescuezilla Live Persistence Overlay Files
-These files are pre-loaded inside `rescuezilla-persistence.dat` on the Ventoy partition (`/dev/sdb1`):
+# Rescuezilla Live Persistence Overlay Architecture
 
-### 1. `mount_ntfs_startup.sh` (Deployed to `/usr/local/bin/`)
-* **Role:** Auto-mounts the USB NTFS partition (`/dev/sdb4`, UUID `2C95D29B2DF0500E`) and symlinks it to `~/ntfs_usb` and `~/Desktop/NTFS_Storage`.
-* **Desktop-Native Mounting:** Uses `udisksctl mount -b "$NTFS_DEV"` instead of raw kernel `mount`. This ensures GNOME Disks and PCManFM file manager recognize the mount natively and eliminates directory lock/collision errors.
-* **Persistent Logging:** All execution steps and errors are logged via `tee` directly to `/var/log/startup_ntfs.log` and `~/startup_ntfs.log`.
+These files and configurations are pre-loaded inside `rescuezilla-persistence.dat` on the Ventoy partition (`/dev/sdb1`):
 
-### 2. `mount-ntfs.desktop` (Deployed to `/home/ubuntu/.config/autostart/`)
-* **Role:** XDG autostart entry that triggers `mount_ntfs_startup.sh` as soon as the graphical Openbox desktop loads.
+### 1. Embedded Top-Level Scripts (`/scripts/` & `~/scripts/`)
+* **Role:** Completely decouples script execution from external partition mounting.
+* **Included Components:**
+  * `/scripts/run_rescuezilla_backup_cli.sh` (Backup Assistant runner)
+  * `/scripts/post-backup-wizard.sh` (Post-backup diagnostic wizard)
+  * `/scripts/id_rsa` & `~/.ssh/id_rsa` (Pre-installed SSH credentials, `chmod 600`)
+  * `/scripts/ventoy_boot_repair_guide.md` (Offline reference manual)
+* **Desktop Folder:** Accessible via the `~/Desktop/Scripts_Folder` symlink.
 
-### 3. `Run_Backup_CLI.desktop` & `Post_Backup_Wizard.desktop` (Deployed to `/home/ubuntu/Desktop/`)
-* **Role:** Instant desktop launchers for the backup assistant and diagnostic wizard.
-* **Window Persistence:** Configured with `xfce4-terminal --hold --geometry=105x32` so the terminal window stays open even if an error occurs, allowing the user to review the diagnostic trace.
+### 2. Desktop Launchers (`/home/ubuntu/Desktop/`)
+* **`Run_Backup_CLI.desktop`:** Launches `sudo bash /scripts/run_rescuezilla_backup_cli.sh`.
+* **`Post_Backup_Wizard.desktop`:** Launches `sudo bash /scripts/post-backup-wizard.sh`.
+* **Window Persistence:** Configured with `xfce4-terminal --hold --geometry=105x32` so terminal windows remain open upon completion or error.
+
+### 3. Startup Mount Automation (`mount_ntfs_startup.sh`)
+* **Deployed to:** `/usr/local/bin/mount_ntfs_startup.sh`
+* **Direct User Mount:** Mounts `/dev/sdb4` (UUID `2C95D29B2DF0500E`) at `/media/ubuntu/2C95D29B2DF0500E` with `uid=1000,gid=1000,umask=000`, granting user `ubuntu` full graphical read/write access without permission barriers.
+* **Persistent Logging:** All execution steps and block device detection logs are mirrored to `/var/log/startup_ntfs.log` and `~/startup_ntfs.log`.
+
+### 4. Multi-Layer Startup Triggers
+* **Systemd Unit:** `/etc/systemd/system/mount-ntfs.service` (enabled in `multi-user.target.wants/`).
+* **Openbox Native:** Appended to `~/.config/openbox/autostart` and `/etc/xdg/openbox/autostart`.
+* **XDG Fallback:** `~/.config/autostart/mount-ntfs.desktop`.

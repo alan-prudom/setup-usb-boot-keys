@@ -309,23 +309,29 @@ mount: wrong fs type, bad option, bad superblock
 ```
 The live kernel deadlocked trying to recover the damaged loopback journal on boot.
 
-### New 512 MB Persistence Architecture
-1. **Clean Image:** Deployed verified 512 MB ext4 image at `/media/devmon/Ventoy/rescuezilla-persistence.dat`.
-2. **Auto-Mount Script (`/usr/local/bin/mount_ntfs_startup.sh`):**
-   * Runs via XDG Autostart on desktop load.
-   * **Desktop-Native Mount (`udisksctl`):** Mounts `/dev/sdb4` via `udisksctl mount -b "$NTFS_DEV"` so GNOME Disks and PCManFM recognize it without path conflicts.
+#### New 512 MB Persistence Architecture
+1. **Clean Image:** Deployed verified 512 MB ext4 image at `/media/devmon/Ventoy/rescuezilla-persistence.dat` with 244 MB free headroom.
+2. **Embedded Top-Level Scripts (`/scripts/` & `~/scripts/`):**
+   * Pre-loads `run_rescuezilla_backup_cli.sh`, `post-backup-wizard.sh`, and `ventoy_boot_repair_guide.md` directly on the persistent root filesystem.
+   * **Zero External Dependencies:** Scripts execute immediately from `/scripts/` without waiting for or depending on any USB partitions to mount.
+   * Accessible on the desktop via the `~/Desktop/Scripts_Folder` symlink.
+3. **Pre-Installed SSH Credentials:**
+   * Installed SSH identity key directly to `/home/ubuntu/.ssh/id_rsa` and `/scripts/id_rsa` (`chmod 600`).
+   * Rescuezilla Live connects to network storage (`192.168.1.34:/media/alan/home40/Clonezilla`) over SSHFS independently.
+4. **Auto-Mount Script (`/usr/local/bin/mount_ntfs_startup.sh`):**
+   * **Direct User Mount:** Mounts Partition 4 (`/dev/sdb4`, UUID `2C95D29B2DF0500E`) at `/media/ubuntu/2C95D29B2DF0500E` with `uid=1000,gid=1000,umask=000`. Eliminates previous `/media/root/` 0700 permission barriers.
    * **Persistent Logging:** Writes full timestamped telemetry to `/var/log/startup_ntfs.log` and `~/startup_ntfs.log`.
    * Creates symlinks at `~/ntfs_usb` and `~/Desktop/NTFS_Storage`.
-   * Secures `id_rsa` permissions to `600`.
-3. **Desktop Launchers:** Pre-loaded on the Live Desktop:
-   * `🚀 Run Backup Assistant (CLI)`: Configured with `xfce4-terminal --hold` so terminal windows remain open even if errors occur.
-   * `🛡️ Post-Backup Diagnostic Wizard`: Chained post-run analysis and log exporter.
+5. **Desktop Launchers:** Pre-loaded on the Live Desktop:
+   * `🚀 Run Backup Assistant (CLI)`: Points directly to `/scripts/run_rescuezilla_backup_cli.sh`.
+   * `🛡️ Post-Backup Diagnostic Wizard`: Points directly to `/scripts/post-backup-wizard.sh`.
+   * **Window Persistence:** Configured with `xfce4-terminal --hold --geometry=105x32` so terminal windows remain open even if errors occur.
 
 ---
 
-## 17. System Clipboard Support
+## 17. Clipboard Utilities Installation for Terminal Operations
 
-To ensure CLI utilities (`gh`, tmux, scripts) can interact seamlessly with the clipboard in both graphical protocols, both providers are installed:
+To support automated clipboard-sharing utilities across terminal multiplexers and scripts:
 * **X11:** `xclip` and `xsel`
 * **Wayland:** `wl-clipboard` (`wl-copy` / `wl-paste`)
 
@@ -337,8 +343,13 @@ Tracked in Git repository [`setup-usb-boot-keys`](https://github.com/alan-prudom
 * `disk_geometry_sdb_zbook.txt`: Reproducible `sfdisk` sector boundaries and UUIDs for `/dev/sda` and `/dev/sdb`.
 * `Ventoy_Core_Backup_2026-09-02_manifest.txt`: Audit log and restoration commands for the 23 GB core backup.
 * `rescuezilla_boot_2207_journal.log`: Extracted 1,622-line systemd journal trace diagnosing the UDisks mount point collision.
+* `session_technical_notes_2026-09-03.md`: Comprehensive master architectural log covering the F6 boot, prompt explanation mandate, persistence anatomy, and four-tier redundancy.
+* `Screenshot_2026-09-03_*.png`: Preserved diagnostic visual evidence on NTFS Partition 4 (`/dev/sdb4`):
+  * `Screenshot_2026-09-03_14-18-40.png`: GNOME Disks Partition 1 (`/dev/sdb1`) busy lock modal.
+  * `Screenshot_2026-09-03_14-19-45.png`: Terminal window holding Status 127 exit code.
+  * `Screenshot_2026-09-03_15-22-16.png`: GParted device inspection showing Partition 4 mounted (key icon) and Partition 1 locked.
 * `ventoy_config/`: USB partition 1 configuration files (`ventoy.json` and `ventoy_grub.cfg`).
-* `persistence_startup/`: Shell script and `.desktop` launchers installed inside the persistence overlay.
+* `persistence_startup/`: Shell scripts, systemd service, and `.desktop` launchers installed inside the persistence overlay.
 
 ---
 
