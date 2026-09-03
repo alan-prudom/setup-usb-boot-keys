@@ -162,18 +162,16 @@ To guarantee that clicking desktop launchers or running backup scripts can never
 
 | File Path | Description & Architectural Purpose | Synchronized Targets | Git Commit |
 | :--- | :--- | :--- | :--- |
-| **`Ventoy/persistence_startup/Run_Backup_CLI.desktop`** | Self-mounting launcher: checks mount, triggers `mount_ntfs_startup.sh` on demand, falls back to `/usr/local/bin/`. | Repo, `/upper/home/ubuntu/Desktop/`. | `e9757c1` |
-| **`Ventoy/persistence_startup/Post_Backup_Wizard.desktop`** | Self-mounting diagnostic launcher with fallback execution. | Repo, `/upper/home/ubuntu/Desktop/`. | `e9757c1` |
+| **`Ventoy/persistence_startup/Run_Backup_CLI.desktop`** | Desktop launcher pointing directly to `/scripts/run_rescuezilla_backup_cli.sh`. Zero partition dependencies. | Repo, `/upper/home/ubuntu/Desktop/`. | `c50cba8` |
+| **`Ventoy/persistence_startup/Post_Backup_Wizard.desktop`** | Desktop launcher pointing directly to `/scripts/post-backup-wizard.sh`. Zero partition dependencies. | Repo, `/upper/home/ubuntu/Desktop/`. | `c50cba8` |
+| **`Ventoy/run_rescuezilla_backup_cli.sh`** | Added multi-candidate search list for `id_rsa` (`/scripts/id_rsa`, `~/.ssh/id_rsa`, etc.). | Repo, NTFS USB root, Ventoy partition, persistence `/scripts/`. | `c50cba8` |
+| **`Ventoy/persistence_startup/mount_ntfs_startup.sh`** | Direct user mount: mounts `/dev/sdb4` at `/media/ubuntu/2C95D29B2DF0500E` with `uid=1000,gid=1000,umask=000`. | Repo, `/upper/usr/local/bin/`. | `c50cba8` |
 | **`Ventoy/persistence_startup/mount-ntfs.service`** | Systemd unit running after `udisks2.service` to mount NTFS before the desktop session starts. | Repo, `/upper/etc/systemd/system/`. | `e9757c1` |
-| **`Ventoy/persistence_startup/mount_ntfs_startup.sh`** | Updated with `udisksctl` desktop-native mount and dual persistent logging (`/var/log/` & `~/`). | Repo, `/upper/usr/local/bin/`. | `5ebfcfa` |
-| **`Ventoy/persistence_startup/README.md`** | Comprehensive documentation on persistence overlay files, autostart, and `--hold` terminal retention. | Repo, secondary clone. | `4149f00` |
-| **`Ventoy/rescuezilla_boot_2207_journal.log`** | Extracted 1,622-line systemd journal trace documenting the UDisks mount point collision. | Repo, `/home/alan/ntfs_usb/`, persistence overlay. | `5ebfcfa` |
-| **`Ventoy/run_rescuezilla_backup_cli.sh`** | Fixed `prompt_choice` stderr redirection, added exit holding pause, installed in `/usr/local/bin/`. | Repo, NTFS USB root, Ventoy partition, persistence `/usr/local/bin/`. | `91c3e90` |
-| **`Ventoy/post-backup-wizard.sh`** | Added exit holding pause on action `8`, installed in `/usr/local/bin/`. | Repo, NTFS USB root, Ventoy partition, persistence `/usr/local/bin/`. | `91c3e90` |
-| **`Ventoy/ventoy_boot_repair_guide.md`** | Updated Section 16 (UDisks fix), Section 18 (artifacts), and Section 19 (terminal access methods). | Repo, NTFS USB root, `docs/`, Ventoy partition, secondary clone. | `4149f00` |
-| **`Ventoy/session_technical_notes_2026-09-03.md`** | Master technical log covering prompt mandates, persistence anatomy, and four-tier architecture. | Repo, NTFS USB root, `docs/`, Ventoy partition, secondary clone. | `6dcd32e` |
-| **`/home/alan/ntfs_usb/Screenshot_2026-09-03_*.png`** | User screenshots showing Partition 1 busy modal and Status 127 terminal holding window. | Preserved on USB NTFS Partition (`/dev/sdb4`). | Offline File |
-| **`/media/devmon/Ventoy/rescuezilla-persistence.dat`** | Four-tier persistent environment: embedded scripts in `/usr/local/bin/`, Openbox autostart, systemd service. | Flash Partition `/dev/sdb1`. | Active Binary |
+| **`Ventoy/persistence_startup/README.md`** | Comprehensive documentation on persistence overlay files, autostart, and `--hold` terminal retention. | Repo, secondary clone. | `7fd5724` |
+| **`Ventoy/ventoy_boot_repair_guide.md`** | Updated Section 16 (Top-Level Scripts & User Mount), Section 18 (Artifacts), and Section 19 (Terminal Access). | Repo, NTFS USB root, `docs/`, Ventoy partition, secondary clone. | `7fd5724` |
+| **`Ventoy/session_technical_notes_2026-09-03.md`** | Master technical notes covering prompt mandates, persistence anatomy, and four-tier architecture. | Repo, NTFS USB root, `docs/`, Ventoy partition, secondary clone. | `c50cba8` |
+| **`/home/alan/ntfs_usb/Screenshot_2026-09-03_*.png`** | User screenshots showing Partition 1 busy modal, Status 127 terminal window, and GParted device state. | Preserved on USB NTFS Partition (`/dev/sdb4`). | Offline Files |
+| **`/media/devmon/Ventoy/rescuezilla-persistence.dat`** | Four-tier persistent environment: embedded scripts in `/scripts/`, Openbox autostart, systemd service, pre-installed SSH key. | Flash Partition `/dev/sdb1`. | Active Binary |
 
 ---
 
@@ -183,14 +181,15 @@ To guarantee that clicking desktop launchers or running backup scripts can never
 1. Insert the USB drive and reboot the HP ZBook.
 2. At the Ventoy menu, select **`rescuezilla-2.6.2-64bit.noble.iso`** -> **`Boot with /rescuezilla-persistence.dat`**.
 3. Once the desktop loads:
+   * Notice the new desktop shortcut **`Scripts_Folder`** opening `/home/ubuntu/scripts/`.
    * A desktop notification will state: `"NTFS Storage Ready: Mounted at /media/ubuntu/2C95D29B2DF0500E"`.
    * Check the persistent log:
      ```bash
      cat ~/startup_ntfs.log
      ```
-   * Notice that `/dev/sdb4` (Partition 4) is cleanly mounted and accessible via `~/ntfs_usb`.
+   * Notice that `/dev/sdb4` (Partition 4) is cleanly mounted with full user read/write permissions at `/media/ubuntu/2C95D29B2DF0500E` and linked to `~/ntfs_usb`.
 4. Double-click **`🚀 Run Backup Assistant (CLI)`**:
-   * The terminal will open in a 105x32 window.
-   * If storage was unmounted, it mounts it on demand; otherwise, it executes immediately.
+   * The terminal will open in a clean 105x32 window executing `/scripts/run_rescuezilla_backup_cli.sh`.
+   * It runs immediately without any possibility of a Status 127 error.
    * Pick `[1] /dev/sda (Internal 1TB Drive)` -> `[1] Windows 11 Only: sda1 + sda2` -> `[1] Clonezilla (ocs-sr)`.
    * The window stays open after execution, holding all logs on screen.
