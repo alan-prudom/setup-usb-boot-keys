@@ -147,14 +147,17 @@ sudo umount /mnt/rz_persist
 
 | File Path | Description & Updates | Repositories & Partitions Synchronized | Git Commit |
 | :--- | :--- | :--- | :--- |
+| **`Ventoy/persistence_startup/Run_Backup_CLI.desktop`** | Self-mounting launcher: detects missing mount, triggers `mount_ntfs_startup.sh`, falls back to `/usr/local/bin/`. | Repo, `/media/devmon/Ventoy/rescuezilla-persistence.dat` (`/upper/home/ubuntu/Desktop/`). | `e9757c1` |
+| **`Ventoy/persistence_startup/Post_Backup_Wizard.desktop`** | Self-mounting diagnostic launcher with fallback execution. | Repo, `/media/devmon/Ventoy/rescuezilla-persistence.dat` (`/upper/home/ubuntu/Desktop/`). | `e9757c1` |
+| **`Ventoy/persistence_startup/mount-ntfs.service`** | System-level systemd service running after `udisks2.service` to mount NTFS before desktop loads. | Repo, `/media/devmon/Ventoy/rescuezilla-persistence.dat` (`/upper/etc/systemd/system/`). | `e9757c1` |
 | **`Ventoy/persistence_startup/mount_ntfs_startup.sh`** | Updated with `udisksctl` desktop-native mount and persistent dual logging (`/var/log/` & `~/`). | Repo, `/media/devmon/Ventoy/rescuezilla-persistence.dat` (`/upper/usr/local/bin/`). | `5ebfcfa` |
 | **`Ventoy/persistence_startup/README.md`** | Detailed guide on `mount_ntfs_startup.sh`, XDG autostart, and `--hold` window persistence. | Repo, secondary clone. | `4149f00` |
-| **`Ventoy/persistence_startup/*.desktop`** | Updated with `xfce4-terminal --hold` and geometry presets. | Repo, `/media/devmon/Ventoy/rescuezilla-persistence.dat` (`/upper/home/ubuntu/Desktop/`). | `91c3e90` |
 | **`Ventoy/rescuezilla_boot_2207_journal.log`** | Extracted 1,622-line systemd journal trace diagnosing the UDisks mount point collision. | Repo, `/home/alan/ntfs_usb/`, `/media/devmon/Ventoy/rescuezilla-persistence.dat`. | `5ebfcfa` |
-| **`Ventoy/run_rescuezilla_backup_cli.sh`** | Fixed `prompt_choice` stderr redirection, added exit holding pause. | Repo, NTFS USB root, Ventoy partition, secondary clone. | `91c3e90` |
-| **`Ventoy/post-backup-wizard.sh`** | Added exit holding pause on action `8`. | Repo, NTFS USB root, Ventoy partition, secondary clone. | `91c3e90` |
+| **`Ventoy/run_rescuezilla_backup_cli.sh`** | Fixed `prompt_choice` stderr redirection, added exit holding pause, installed in `/usr/local/bin/`. | Repo, NTFS USB root, Ventoy partition, persistence `/usr/local/bin/`. | `91c3e90` |
+| **`Ventoy/post-backup-wizard.sh`** | Added exit holding pause on action `8`, installed in `/usr/local/bin/`. | Repo, NTFS USB root, Ventoy partition, persistence `/usr/local/bin/`. | `91c3e90` |
 | **`Ventoy/ventoy_boot_repair_guide.md`** | Updated Section 16 (UDisks fix), Section 18 (artifacts), and Section 19 (terminal access methods). | Repo, NTFS USB root, `docs/`, Ventoy partition, secondary clone. | `4149f00` |
-| **`/media/devmon/Ventoy/rescuezilla-persistence.dat`** | Clean 512 MB Ext4 image, verified via `e2fsck`, 174 MB core dump removed, 358 MB free space. | Flash Partition `/dev/sdb1`. | Active Binary |
+| **`/home/alan/ntfs_usb/Screenshot_2026-09-03_*.png`** | User screenshots showing Partition 1 exFAT busy error and Status 127 terminal holding window. | Preserved on USB NTFS Partition (`/dev/sdb4`). | Offline File |
+| **`/media/devmon/Ventoy/rescuezilla-persistence.dat`** | Four-tier persistent environment: embedded scripts in `/usr/local/bin/`, Openbox autostart, systemd service. | Flash Partition `/dev/sdb1`. | Active Binary |
 
 ---
 
