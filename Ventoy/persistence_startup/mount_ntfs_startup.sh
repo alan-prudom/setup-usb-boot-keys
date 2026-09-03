@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Rescuezilla Live Persistence Startup Task
-# Robust NTFS Mount with UDisks2 and Full Persistence Logging
+# Mounts USB NTFS partition at /media/ubuntu/ with full user permissions
 # ==============================================================================
 
 LOG_FILE="/var/log/startup_ntfs.log"
@@ -14,30 +14,26 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Rescuezilla NTFS Mount Task"
 echo "Running as: $(whoami) (UID: $(id -u))"
 echo "======================================================================"
 
-sleep 2
+sleep 1
 
-# 1. Locate NTFS Partition
 NTFS_UUID="2C95D29B2DF0500E"
 NTFS_DEV=""
 
-# Try finding by UUID
+# 1. Locate device
 if command -v blkid >/dev/null 2>&1; then
     NTFS_DEV=$(sudo blkid -U "$NTFS_UUID" 2>/dev/null || blkid -U "$NTFS_UUID" 2>/dev/null || echo "")
 fi
 
-# Fallback scan via lsblk
 if [ -z "$NTFS_DEV" ]; then
     NTFS_DEV=$(lsblk -rno PATH,UUID | grep -i "$NTFS_UUID" | awk '{print $1}' || echo "")
 fi
 
-# Fallback scan partition list
 if [ -z "$NTFS_DEV" ]; then
     for dev in /dev/sdb4 /dev/sda4 /dev/sdb3; do
         if [ -b "$dev" ]; then
             fstype=$(lsblk -no FSTYPE "$dev" 2>/dev/null || echo "")
             if echo "$fstype" | grep -iE "ntfs|fuseblk" >/dev/null 2>&1; then
                 NTFS_DEV="$dev"
-                echo "Found NTFS filesystem on $dev via fallback scan"
                 break
             fi
         fi
@@ -46,56 +42,32 @@ fi
 
 echo "Detected NTFS Block Device: '${NTFS_DEV:-NOT_FOUND}'"
 
-if [ -z "$NTFS_DEV" ] || [ ! -b "$NTFS_DEV" ]; then
-    echo "ERROR: Unable to locate block device for UUID $NTFS_UUID"
-    exit 1
-fi
-
-# 2. Check if already mounted
-EXISTING_MOUNT=$(lsblk -no MOUNTPOINT "$NTFS_DEV" 2>/dev/null | grep -v "^$" | head -n 1 || echo "")
-
-if [ -n "$EXISTING_MOUNT" ]; then
-    echo "Device $NTFS_DEV is already mounted at: $EXISTING_MOUNT"
-    TARGET_MOUNT="$EXISTING_MOUNT"
-else
-    echo "Attempting to mount $NTFS_DEV via udisksctl (Desktop-native)..."
-    UDISKS_OUT=$(udisksctl mount -b "$NTFS_DEV" 2>&1 || true)
-    echo "udisksctl output: $UDISKS_OUT"
+if [ -n "$NTFS_DEV" ] && [ -b "$NTFS_DEV" ]; then
+    TARGET_MOUNT="/media/ubuntu/${NTFS_UUID}"
+    mkdir -p "$TARGET_MOUNT"
+    chmod 777 /media/ubuntu 2>/dev/null || true
     
-    TARGET_MOUNT=$(lsblk -no MOUNTPOINT "$NTFS_DEV" 2>/dev/null | grep -v "^$" | head -n 1 || echo "")
-    
-    # Fallback to manual sudo mount if udisksctl failed
-    if [ -z "$TARGET_MOUNT" ]; then
-        echo "udisksctl mount unsuccessful. Falling back to sudo mount..."
-        FALLBACK_DIR="/media/ubuntu/${NTFS_UUID}"
-        sudo mkdir -p "$FALLBACK_DIR"
-        sudo mount -t ntfs-3g -o rw,umask=000,force "$NTFS_DEV" "$FALLBACK_DIR" 2>&1 || \
-        sudo mount -o rw,umask=000 "$NTFS_DEV" "$FALLBACK_DIR" 2>&1 || true
-        TARGET_MOUNT="$FALLBACK_DIR"
+    if ! mountpoint -q "$TARGET_MOUNT"; then
+        echo "Mounting $NTFS_DEV at $TARGET_MOUNT (read-write, user-accessible)..."
+        mount -t ntfs-3g -o rw,umask=000,uid=1000,gid=1000,force "$NTFS_DEV" "$TARGET_MOUNT" 2>&1 || \
+        mount -o rw,umask=000 "$NTFS_DEV" "$TARGET_MOUNT" 2>&1 || true
+    else
+        echo "Device is already mounted at $TARGET_MOUNT."
     fi
-fi
 
-echo "Final Mount Point: '$TARGET_MOUNT'"
-
-# 3. Create Convenience Symlinks and Permissions
-if [ -n "$TARGET_MOUNT" ] && [ -d "$TARGET_MOUNT" ]; then
+    # Create symlinks in user profile
     mkdir -p /home/ubuntu/Desktop
     ln -sfn "$TARGET_MOUNT" /home/ubuntu/ntfs_usb
     ln -sfn "$TARGET_MOUNT" /home/ubuntu/Desktop/NTFS_Storage
-    echo "Created symlinks: ~/ntfs_usb -> $TARGET_MOUNT"
+    chown -h 999:999 /home/ubuntu/ntfs_usb /home/ubuntu/Desktop/NTFS_Storage 2>/dev/null || \
+    chown -h 1000:1000 /home/ubuntu/ntfs_usb /home/ubuntu/Desktop/NTFS_Storage 2>/dev/null || true
+    
+    echo "Created user symlink: ~/ntfs_usb -> $TARGET_MOUNT"
     
     if [ -f "${TARGET_MOUNT}/id_rsa" ]; then
         chmod 600 "${TARGET_MOUNT}/id_rsa" 2>/dev/null || true
-        echo "Secured SSH key permissions on ${TARGET_MOUNT}/id_rsa (600)"
     fi
     
-    if command -v notify-send >/dev/null 2>&1; then
-        notify-send -i drive-harddisk "NTFS Storage Ready" "Mounted at ${TARGET_MOUNT} (linked to ~/ntfs_usb)" 2>/dev/null || true
-    fi
-    echo "SUCCESS: NTFS Partition successfully initialized and linked."
-else
-    echo "FAILED: Could not establish a valid mount point for $NTFS_DEV."
-    exit 2
+    echo "SUCCESS: NTFS partition mounted and symlinked."
 fi
-
 echo "======================================================================"

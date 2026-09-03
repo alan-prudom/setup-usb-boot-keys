@@ -78,7 +78,16 @@ MOUNT_POINT="/mnt/backup"
 LOG_DIR="${SCRIPT_DIR}"
 
 if [ ! -f "$KEY_FILE" ]; then
-    KEY_FILE=$(find /media /mnt -name "id_rsa" 2>/dev/null | head -n 1)
+    for candidate in "/scripts/id_rsa" "/home/ubuntu/.ssh/id_rsa" "/home/ubuntu/scripts/id_rsa" "${SCRIPT_DIR}/id_rsa"; do
+        if [ -f "$candidate" ]; then
+            KEY_FILE="$candidate"
+            break
+        fi
+    done
+fi
+
+if [ ! -f "$KEY_FILE" ]; then
+    KEY_FILE=$(find /media /mnt /home -name "id_rsa" 2>/dev/null | head -n 1)
 fi
 
 if [ -z "$KEY_FILE" ] || [ ! -f "$KEY_FILE" ]; then

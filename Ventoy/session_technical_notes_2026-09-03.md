@@ -100,6 +100,33 @@
   4. When the user later clicked "Mount" in GNOME Disks, `udisksd` saw an existing directory on a device marked for cleanup and refused to mount, leaving the drive locked.
 * **Resolution:** Switched to **`udisksctl mount -b "$NTFS_DEV"`**. Desktop users have Polkit rights to mount removable storage without sudo, and UDisks manages the mount natively without path collisions.
 
+### 1.7 Analysis of Screenshot 3 (`GParted: /dev/sdb1 busy vs /dev/sdb4 active key icon`)
+* **Visual Evidence:** Screenshot `Screenshot_2026-09-03_15-22-16.png` captured in the latest test shows GParted inspecting `/dev/sdb`:
+  * Partition 1 (`/dev/sdb1` Ventoy exFAT): Yellow warning icon (`open failed: /dev/sdb1, Device or resource busy`).
+  * Partition 4 (`/dev/sdb4` NTFS Data): Displays a **key icon** and reports `44.95 GiB` unused.
+* **Technical Significance:**
+  1. The key icon in GParted proves that **Partition 4 (`/dev/sdb4`) was indeed mounted and active**.
+  2. Partition 1 was busy because it is the physical boot media held by the running kernel.
+  3. However, checking `startup_ntfs.log` revealed why the user experienced permission issues:
+     ```text
+     [2026-09-03 15:13:59] Starting Rescuezilla NTFS Mount Task
+     Running as: root (UID: 0)
+     udisksctl output: Mounted /dev/sdb4 at /media/root/2C95D29B2DF0500E
+     ```
+     Because the systemd service ran as root, `udisksctl` mounted the partition at `/media/root/2C95D29B2DF0500E`. Under Ubuntu, `/media/root` is set to `0700` (`rwx------`), completely blocking user `ubuntu` from entering the directory or following the symlink `~/ntfs_usb`!
+
+---
+
+### 1.8 The User's Architectural Proposal: Top-Level Persistence Scripts
+* **User Directive:** *"why not put a copy of the scripts in the top level of the persitance image."*
+* **Architectural Advantage:**
+  * Previously, the desktop launchers relied on `/home/ubuntu/ntfs_usb/run_rescuezilla_backup_cli.sh`. If the NTFS partition was delayed in mounting or mounted under root, the launcher failed with Status 127.
+  * By embedding a full copy of the scripts and SSH keys directly into the persistence container at **`/scripts/`** and **`~/scripts/`**:
+    1. **Zero External Dependencies:** The backup runner and diagnostic wizard are 100% self-contained within the persistence overlay.
+    2. **Instant Execution:** Clicking the desktop icon executes `/scripts/run_rescuezilla_backup_cli.sh` immediately without waiting for or depending on any USB partition mounts.
+    3. **Pre-Loaded SSH Credentials:** The SSH key was installed directly to `/home/ubuntu/.ssh/id_rsa` and `/scripts/id_rsa` (`chmod 600`), allowing Rescuezilla to connect to `192.168.1.34` over SSHFS standalone.
+* **NTFS Mount Fix:** Updated `mount_ntfs_startup.sh` to mount directly at `/media/ubuntu/2C95D29B2DF0500E` with `uid=1000,gid=1000,umask=000`, ensuring user `ubuntu` has full graphical access.
+
 ---
 
 ## 2. The Four-Tier Redundancy Architecture Implemented
