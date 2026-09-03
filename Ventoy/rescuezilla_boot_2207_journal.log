@@ -1,0 +1,86 @@
+================================================================================
+RESCUEZILLA LIVE SESSION JOURNAL & SYSLOG EXTRACT (BOOT SESSION 2026-09-02 22:07)
+Extracted from: /var/log/syslog (stored in persistence partition)
+Target Investigation: NTFS Mount Status, Disks / UDisks2 State, Desktop Execution
+================================================================================
+
+--- 1. KERNEL BOOT & DRIVE RECOGNITION ---
+2026-09-02T22:07:46.217189+00:00 ubuntu kernel: Linux version 6.8.0-117-generic (buildd@lcy02-amd64-102) (x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, GNU ld (GNU Binutils for Ubuntu) 2.42) #117-Ubuntu SMP PREEMPT_DYNAMIC Tue May  5 19:26:24 UTC 2026 (Ubuntu 6.8.0-117.117-generic 6.8.12)
+2026-09-02T22:07:46.217193+00:00 ubuntu systemd[1]: systemd-hwdb-update.service - Rebuild Hardware Database was skipped because of an unmet condition check (ConditionNeedsUpdate=/etc).
+2026-09-02T22:07:46.217197+00:00 ubuntu kernel: Command line: BOOT_IMAGE=/casper/vmlinuz boot=casper quiet splash fastboot fsck.mode=skip noprompt edd=on locale=en_US console-setup/layoutcode=us bootkbd=us --
+2026-09-02T22:07:46.217198+00:00 ubuntu kernel: KERNEL supported cpus:
+2026-09-02T22:07:46.217199+00:00 ubuntu kernel:   Intel GenuineIntel
+2026-09-02T22:07:46.217200+00:00 ubuntu kernel:   AMD AuthenticAMD
+2026-09-02T22:07:46.217200+00:00 ubuntu kernel:   Hygon HygonGenuine
+2026-09-02T22:07:46.217201+00:00 ubuntu kernel:   Centaur CentaurHauls
+2026-09-02T22:07:46.217204+00:00 ubuntu kernel:   zhaoxin   Shanghai  
+2026-09-02T22:07:46.217205+00:00 ubuntu kernel: BIOS-provided physical RAM map:
+2026-09-02T22:07:46.217206+00:00 ubuntu kernel: BIOS-e820: [mem 0x0000000000000000-0x0000000000099fff] usable
+2026-09-02T22:07:46.217207+00:00 ubuntu kernel: BIOS-e820: [mem 0x00000000000e0000-0x00000000000fffff] reserved
+2026-09-02T22:07:46.217208+00:00 ubuntu kernel: BIOS-e820: [mem 0x0000000000100000-0x00000000aa7eafff] usable
+2026-09-02T22:07:46.217209+00:00 ubuntu kernel: BIOS-e820: [mem 0x00000000aab7f000-0x00000000abe7efff] reserved
+2026-09-02T22:07:46.217199+00:00 ubuntu systemd-modules-load[1524]: Module 'pcspkr' is deny-listed (by kmod)
+2026-09-02T22:07:46.217212+00:00 ubuntu kernel: BIOS-e820: [mem 0x00000000abe7f000-0x00000000abf7efff] ACPI NVS
+2026-09-02T22:07:46.217213+00:00 ubuntu kernel: BIOS-e820: [mem 0x00000000abf7f000-0x00000000abffefff] ACPI data
+2026-09-02T22:07:46.217214+00:00 ubuntu kernel: BIOS-e820: [mem 0x00000000abfff000-0x00000000abffffff] usable
+2026-09-02T22:07:46.217214+00:00 ubuntu kernel: BIOS-e820: [mem 0x00000000ac000000-0x00000000af1fffff] reserved
+2026-09-02T22:07:46.217212+00:00 ubuntu systemd[1]: Starting systemd-journal-flush.service - Flush Journal to Persistent Storage...
+2026-09-02T22:07:46.217215+00:00 ubuntu kernel: BIOS-e820: [mem 0x00000000e0000000-0x00000000efffffff] reserved
+2026-09-02T22:07:46.217216+00:00 ubuntu kernel: BIOS-e820: [mem 0x00000000fec00000-0x00000000fec00fff] reserved
+2026-09-02T22:07:46.217217+00:00 ubuntu kernel: BIOS-e820: [mem 0x00000000fed10000-0x00000000fed13fff] reserved
+2026-09-02T22:07:46.217217+00:00 ubuntu systemd[1]: systemd-pstore.service - Platform Persistent Storage Archival was skipped because of an unmet condition check (ConditionDirectoryNotEmpty=/sys/fs/pstore).
+2026-09-02T22:07:46.217222+00:00 ubuntu kernel: BIOS-e820: [mem 0x00000000fed18000-0x00000000fed19fff] reserved
+2026-09-02T22:07:46.217223+00:00 ubuntu kernel: BIOS-e820: [mem 0x00000000fed1c000-0x00000000fed1ffff] reserved
+
+--- 2. BLOCK DEVICE SDB DETECTION & PARTITIONS ---
+2026-09-02T22:07:46.219090+00:00 ubuntu kernel: sd 2:0:0:0: [sdb] 249737216 512-byte logical blocks: (128 GB/119 GiB)
+2026-09-02T22:07:46.219091+00:00 ubuntu kernel: sd 2:0:0:0: [sdb] Write Protect is off
+2026-09-02T22:07:46.219092+00:00 ubuntu kernel: sd 2:0:0:0: [sdb] Mode Sense: 03 00 00 00
+2026-09-02T22:07:46.219092+00:00 ubuntu kernel: sd 2:0:0:0: [sdb] No Caching mode page found
+2026-09-02T22:07:46.219097+00:00 ubuntu kernel: sd 2:0:0:0: [sdb] Assuming drive cache: write through
+2026-09-02T22:07:46.219098+00:00 ubuntu kernel:  sdb: sdb1 sdb2 sdb3 sdb4
+2026-09-02T22:07:46.219099+00:00 ubuntu kernel: sd 2:0:0:0: [sdb] Attached SCSI removable disk
+2026-09-02T22:07:46.219100+00:00 ubuntu kernel: raid6: avx2x4   gen() 28596 MB/s
+2026-09-02T22:07:46.219100+00:00 ubuntu kernel: raid6: avx2x2   gen() 29726 MB/s
+2026-09-02T22:07:46.219101+00:00 ubuntu kernel: raid6: avx2x1   gen() 28010 MB/s
+2026-09-02T22:07:46.219106+00:00 ubuntu kernel: raid6: using algorithm avx2x2 gen() 29726 MB/s
+
+--- 3. UDISKS2 DAEMON & MOUNT POINT CLEANUP (ROOT CAUSE OF "FUNNY STATE") ---
+2026-09-02T22:07:48.175165+00:00 ubuntu NetworkManager[2107]: <info>  [1788386868.1749] ifupdown: management mode: unmanaged
+2026-09-02T22:07:48.177277+00:00 ubuntu NetworkManager[2107]: <info>  [1788386868.1765] ifupdown: interfaces file /etc/network/interfaces doesn't exist
+2026-09-02T22:07:48.251240+00:00 ubuntu systemd[1]: Starting NetworkManager-dispatcher.service - Network Manager Script Dispatcher Service...
+2026-09-02T22:07:48.281811+00:00 ubuntu systemd[1]: Started udisks2.service - Disk Manager.
+2026-09-02T22:07:48.282990+00:00 ubuntu udisksd[1991]: Acquired the name org.freedesktop.UDisks2 on the system message bus
+2026-09-02T22:07:48.287606+00:00 ubuntu udisksd[1991]: Cleaning up mount point /media/ubuntu/2C95D29B2DF0500E (device 8:20 is not mounted)
+2026-09-02T22:07:48.381393+00:00 ubuntu dbus-daemon[1967]: [system] Successfully activated service 'org.freedesktop.nm_dispatcher'
+2026-09-02T22:07:48.381797+00:00 ubuntu systemd[1]: Started NetworkManager-dispatcher.service - Network Manager Script Dispatcher Service.
+2026-09-02T22:07:49.311437+00:00 ubuntu systemd[1]: Reloading requested from client PID 2196 ('systemctl') (unit NetworkManager.service)...
+2026-09-02T22:07:49.311519+00:00 ubuntu systemd[1]: Reloading...
+2026-09-02T22:07:49.611591+00:00 ubuntu systemd[1]: Reloading finished in 299 ms.
+
+--- 4. XDG AUTOSTART GENERATOR EXECUTION ---
+2026-09-02T22:07:56.633664+00:00 ubuntu systemd[1]: Created slice user-1000.slice - User Slice of UID 1000.
+2026-09-02T22:07:56.634398+00:00 ubuntu systemd[1]: Starting user-runtime-dir@1000.service - User Runtime Directory /run/user/1000...
+2026-09-02T22:07:56.653623+00:00 ubuntu systemd[1]: Finished user-runtime-dir@1000.service - User Runtime Directory /run/user/1000.
+2026-09-02T22:07:56.655397+00:00 ubuntu systemd[1]: Starting user@1000.service - User Manager for UID 1000...
+2026-09-02T22:07:56.706466+00:00 ubuntu systemd-xdg-autostart-generator[2348]: Configuration file /home/ubuntu/.config/autostart/mount-ntfs.desktop is marked executable. Please remove executable permission bits. Proceeding anyway.
+2026-09-02T22:07:56.726216+00:00 ubuntu kernel: systemd-journald[1514]: /var/log/journal/23fdf13fb589425fbd5ca198cec63701/user-1000.journal: Journal file uses a different sequence number ID, rotating.
+2026-09-02T22:07:56.855696+00:00 ubuntu systemd-xdg-autostart-generator[2348]: Exec binary '/usr/bin/casper-a11y-enable' does not exist: No such file or directory
+2026-09-02T22:07:56.855785+00:00 ubuntu systemd-xdg-autostart-generator[2348]: /etc/xdg/autostart/screen-reader-profile.desktop: not generating unit, executable specified in Exec= does not exist.
+2026-09-02T22:07:56.900362+00:00 ubuntu systemd[2337]: Queued start job for default target default.target.
+
+--- 5. ALL SDB & NTFS ACTIVITY DURING SESSION ---
+2026-09-02T22:07:46.219090+00:00 ubuntu kernel: sd 2:0:0:0: [sdb] 249737216 512-byte logical blocks: (128 GB/119 GiB)
+2026-09-02T22:07:46.219091+00:00 ubuntu kernel: sd 2:0:0:0: [sdb] Write Protect is off
+2026-09-02T22:07:46.219092+00:00 ubuntu kernel: sd 2:0:0:0: [sdb] Mode Sense: 03 00 00 00
+2026-09-02T22:07:46.219092+00:00 ubuntu kernel: sd 2:0:0:0: [sdb] No Caching mode page found
+2026-09-02T22:07:46.219097+00:00 ubuntu kernel: sd 2:0:0:0: [sdb] Assuming drive cache: write through
+2026-09-02T22:07:46.219098+00:00 ubuntu kernel:  sdb: sdb1 sdb2 sdb3 sdb4
+2026-09-02T22:07:46.219099+00:00 ubuntu kernel: sd 2:0:0:0: [sdb] Attached SCSI removable disk
+2026-09-02T22:07:56.706466+00:00 ubuntu systemd-xdg-autostart-generator[2348]: Configuration file /home/ubuntu/.config/autostart/mount-ntfs.desktop is marked executable. Please remove executable permission bits. Proceeding anyway.
+2026-09-02T22:15:04.148205+00:00 ubuntu kernel: /dev/sdb1: Can't open blockdev
+2026-09-02T22:15:18.822241+00:00 ubuntu kernel: /dev/sdb1: Can't open blockdev
+
+================================================================================
+END OF EXTRACT
+================================================================================
