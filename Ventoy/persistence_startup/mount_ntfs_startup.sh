@@ -20,14 +20,17 @@ sleep 2
 NTFS_UUID="2C95D29B2DF0500E"
 NTFS_DEV=""
 
+# Try finding by UUID
 if command -v blkid >/dev/null 2>&1; then
     NTFS_DEV=$(sudo blkid -U "$NTFS_UUID" 2>/dev/null || blkid -U "$NTFS_UUID" 2>/dev/null || echo "")
 fi
 
+# Fallback scan via lsblk
 if [ -z "$NTFS_DEV" ]; then
     NTFS_DEV=$(lsblk -rno PATH,UUID | grep -i "$NTFS_UUID" | awk '{print $1}' || echo "")
 fi
 
+# Fallback scan partition list
 if [ -z "$NTFS_DEV" ]; then
     for dev in /dev/sdb4 /dev/sda4 /dev/sdb3; do
         if [ -b "$dev" ]; then
@@ -61,6 +64,7 @@ else
     
     TARGET_MOUNT=$(lsblk -no MOUNTPOINT "$NTFS_DEV" 2>/dev/null | grep -v "^$" | head -n 1 || echo "")
     
+    # Fallback to manual sudo mount if udisksctl failed
     if [ -z "$TARGET_MOUNT" ]; then
         echo "udisksctl mount unsuccessful. Falling back to sudo mount..."
         FALLBACK_DIR="/media/ubuntu/${NTFS_UUID}"
@@ -93,4 +97,5 @@ else
     echo "FAILED: Could not establish a valid mount point for $NTFS_DEV."
     exit 2
 fi
+
 echo "======================================================================"

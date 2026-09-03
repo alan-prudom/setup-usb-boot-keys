@@ -313,12 +313,13 @@ The live kernel deadlocked trying to recover the damaged loopback journal on boo
 1. **Clean Image:** Deployed verified 512 MB ext4 image at `/media/devmon/Ventoy/rescuezilla-persistence.dat`.
 2. **Auto-Mount Script (`/usr/local/bin/mount_ntfs_startup.sh`):**
    * Runs via XDG Autostart on desktop load.
-   * Detects and mounts `/dev/sdb4` read-write at `/media/ubuntu/2C95D29B2DF0500E`.
+   * **Desktop-Native Mount (`udisksctl`):** Mounts `/dev/sdb4` via `udisksctl mount -b "$NTFS_DEV"` so GNOME Disks and PCManFM recognize it without path conflicts.
+   * **Persistent Logging:** Writes full timestamped telemetry to `/var/log/startup_ntfs.log` and `~/startup_ntfs.log`.
    * Creates symlinks at `~/ntfs_usb` and `~/Desktop/NTFS_Storage`.
    * Secures `id_rsa` permissions to `600`.
 3. **Desktop Launchers:** Pre-loaded on the Live Desktop:
-   * `🚀 Run Backup Assistant (CLI)`
-   * `🛡️ Post-Backup Diagnostic Wizard`
+   * `🚀 Run Backup Assistant (CLI)`: Configured with `xfce4-terminal --hold` so terminal windows remain open even if errors occur.
+   * `🛡️ Post-Backup Diagnostic Wizard`: Chained post-run analysis and log exporter.
 
 ---
 
@@ -335,13 +336,44 @@ To ensure CLI utilities (`gh`, tmux, scripts) can interact seamlessly with the c
 Tracked in Git repository [`setup-usb-boot-keys`](https://github.com/alan-prudom/setup-usb-boot-keys) under [`Ventoy/`](file:///home/alan/mnt/zbook/files_g5/GitHub/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/):
 * `disk_geometry_sdb_zbook.txt`: Reproducible `sfdisk` sector boundaries and UUIDs for `/dev/sda` and `/dev/sdb`.
 * `Ventoy_Core_Backup_2026-09-02_manifest.txt`: Audit log and restoration commands for the 23 GB core backup.
+* `rescuezilla_boot_2207_journal.log`: Extracted 1,622-line systemd journal trace diagnosing the UDisks mount point collision.
 * `ventoy_config/`: USB partition 1 configuration files (`ventoy.json` and `ventoy_grub.cfg`).
 * `persistence_startup/`: Shell script and `.desktop` launchers installed inside the persistence overlay.
 
 ---
 
-## 19. Related Documentation & Operations Manuals
+## 19. Accessing Persistent Storage from the Rescuezilla Terminal
 
-* **[Comprehensive User Guide (`USER_GUIDE.md`)](file:///home/alan/GitHub/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/USER_GUIDE.md):** Unified manual covering BIOS Legacy boot, NTFS dirty-bit and read-write mounting, command-line backup automation, and error triage.
-* **[HP EliteBook Boot Summary (`boot.md`)](file:///home/alan/GitHub/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/boot.md):** Quick hardware summary and GRUB missing-module troubleshooting.
+When booted into Rescuezilla Live with `/rescuezilla-persistence.dat`:
+
+1. **Direct Live Root (`/`):**  
+   The persistence image is already the active root filesystem. Files created in `/home/ubuntu/`, `/etc/`, `/var/log/`, or `/usr/local/` persist automatically across reboots.
+2. **Inspecting the Raw Overlay Delta (COW):**  
+   To see only the delta of modified files:
+   ```bash
+   ls -la /run/initramfs/cow/upper/
+   ```
+3. **Accessing the Base Ventoy USB Partition (`/dev/sdb1`):**  
+   To access the underlying partition where `rescuezilla-persistence.dat` resides:
+   ```bash
+   sudo mkdir -p /media/ventoy && sudo mount /dev/sdb1 /media/ventoy
+   ls -lh /media/ventoy/
+   ```
+4. **Accessing Persistence from Installed Ubuntu (Booted via `F6`):**  
+   Mount the loopback image directly:
+   ```bash
+   sudo mkdir -p /mnt/rz_persist
+   sudo mount -o loop /media/devmon/Ventoy/rescuezilla-persistence.dat /mnt/rz_persist
+   ls -la /mnt/rz_persist/upper/
+   sudo umount /mnt/rz_persist
+   ```
+
+---
+
+## 20. Related Documentation & Operations Manuals
+
+* **[Session Technical Notes (`session_technical_notes_2026-09-02.md`)](file:///home/alan/mnt/zbook/files_g5/GitHub/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/session_technical_notes_2026-09-02.md):** Deep technical log covering the bash argument parsing trap, the UDisks directory collision, and the persistence architecture.
+* **[Comprehensive User Guide (`USER_GUIDE.md`)](file:///home/alan/mnt/zbook/files_g5/GitHub/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/USER_GUIDE.md):** Unified manual covering BIOS Legacy boot, NTFS dirty-bit and read-write mounting, command-line backup automation, and error triage.
+* **[HP EliteBook Boot Summary (`boot.md`)](file:///home/alan/mnt/zbook/files_g5/GitHub/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/boot.md):** Quick hardware summary and GRUB missing-module troubleshooting.
+
 
