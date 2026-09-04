@@ -1,0 +1,16 @@
+[Unit]
+Description=SSHFS Mount home40 for Git Folders
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+ExecStartPre=/bin/mkdir -p /home/alan/mnt/apelite
+ExecStart=/usr/bin/sshfs -o idmap=user,follow_symlinks,identityfile=/home/alan/.ssh/id_rsa,allow_other,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 alan@192.168.1.34:/media/alan/home40 /home/alan/mnt/apelite
+ExecStop=/bin/fusermount -u /home/alan/mnt/apelite
+Restart=on-failure
+RestartSec=10
+RemainAfterExit=yes
+
+[Install]
+WantedBy=default.target

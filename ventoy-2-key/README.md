@@ -108,3 +108,23 @@ All scripts and configuration templates are tracked in git under `devices/setup-
   ./devices/setup-usb-boot-keys/ventoy-2-key/verify_ventoy2.sh
   ```
 * **`upgrade_ventoy2.sh`**: Non-destructive upgrade wizard (`Ventoy2Disk.sh -u`) for future updates.
+
+
+---
+
+## 6. Persistence & Live Rescue Architecture (September 4, 2026 Baseline)
+
+### 6.1 Four-Tier Redundancy Architecture
+1. **Tier 1: Embedded Root Binaries (`/scripts/` & `/usr/local/bin/`)**
+   - Completely decoupled from external disk mounting to eliminate Status 127 errors.
+   - Includes `run_rescuezilla_backup_cli.sh` and `post-backup-wizard.sh`.
+2. **Tier 2: Automatic Storage Detection & Mounting**
+   - Script `/usr/local/bin/mount_storage_startup.sh` auto-mounts `SHARED FAT` (`UUID=C9D1-3C83`) with `uid=1000,gid=1000,umask=000` at `/media/ubuntu/SHARED_FAT`.
+   - Mounts internal HDD Linux partition `/dev/sda5` (read-only) at `/media/ubuntu/Internal_HDD`.
+3. **Tier 3: Openbox-Native Autostart**
+   - Registered in both `/home/ubuntu/.config/openbox/autostart` and `/etc/xdg/openbox/autostart`.
+4. **Tier 4: Desktop Launchers with Window Retention (`--hold`)**
+   - Launchers on `/home/ubuntu/Desktop/` maintain terminal logs open on exit.
+
+### 6.2 Automatic Network Storage (`home40`)
+- Systemd user service `mount-home40.service` auto-mounts `192.168.1.34:/media/alan/home40` via SSHFS on boot, restoring access to linked Git workspaces.
