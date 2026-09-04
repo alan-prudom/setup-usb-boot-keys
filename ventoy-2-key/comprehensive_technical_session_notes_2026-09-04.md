@@ -227,3 +227,70 @@ Created and activated a user-level systemd service:
      * Start the graphical desktop with: `sudo systemctl start gdm3` or run a direct X session with `startx`.
 3. Once logged in, `mount-home40.service` initializes automatically, mounting `home40` at `~/mnt/apelite`.
 4. `~/GitHub` resolves immediately to all active repositories.
+
+---
+
+## 9. Topic 6: Persistence Overlay Forensics, Casper OverlayFS Architecture & Script Ecosystem Alignment
+
+### 9.1 Problem & User Observation
+During live testing of Rescuezilla 2.6.1 Live (+Persistence) on Ventoy 2, three specific anomalies were encountered:
+1. **Perceived Persistence Failure:** The desktop loaded in its stock state without custom launchers (`Run_Backup_CLI`, `Post_Backup_Wizard`) or storage links, and the 87 GB FAT partition (`/dev/sdb4`) was not mounted automatically.
+2. **Missing Operational Scripts:** After manually mounting `/dev/sdb4` (at `/media/ubuntu/SHARED FAT`), navigating to `/scripts/` revealed none of the expected Clonezilla runners (`run_rescuezilla_backup_cli.sh`, `sda_rescue_backup.sh`) or post-mortem diagnostic tools (`post-backup-wizard.sh`).
+3. **Unrelated Peripheral Scripts:** Only `run_mosh/`, `tailscale_setup.sh`, `deploy_four_tier_persistence.sh`, and `mount_fat_and_hdd.sh` were present on the FAT drive, causing confusion.
+
+### 9.2 Forensic Evidence Audit
+1. **User Screenshot Audit (`/ntfs/Screenshot_2026-09-04_18-59-37.png`):**
+   - Verified GNOME Disks (`gnome-disks`) captured inside the Rescuezilla live session at 18:59:37.
+   - Showed `/dev/sdb4` (87 GB FAT32, `SHARED FAT`, UUID `C9D1-3C83`) unmounted with the Play (Mount) icon active.
+   - Revealed active `nbd` devices (`/dev/nbd0` through `/dev/nbd15`), confirming Rescuezilla execution.
+2. **Persistence Container Logs (`/upper/var/log/syslog` & `/upper/root/.bash_history`):**
+   - **Kernel Mount Confirmed:** At `18:54:49`, the kernel mapped `rescuezilla-persistence.dat` as `dm-1` (`vtoy_persistent`) and mounted the ext4 filesystem (`UUID=309a9e74-4230-458f-b89e-c492dcd3506f`) read-write.
+   - **Manual User Mount:** At `18:59:19`, `udisksd` mounted `/dev/sdb4` to `/media/ubuntu/SHARED FAT` on behalf of UID 1000.
+   - **Execution of Helper:** At `19:02:38`, root executed `mount_fat_and_hdd.sh`, which mounted `/dev/sda5` read-only.
+
+### 9.3 The Casper OverlayFS Invisibility Mechanism
+* **Root Cause:** Modern Ubuntu Casper (Ubuntu 24.10 / Rescuezilla 2.6.1) constructs its live root filesystem using Linux **OverlayFS**:
+  $$\text{Rootfs} = \text{OverlayFS}(\text{lowerdir}=\text{/rofs}, \; \text{upperdir}=\text{/cow/upper}, \; \text{workdir}=\text{/cow/work})$$
+* The physical persistence container (`rescuezilla-persistence.dat`) is mounted by Casper at `/cow`.
+* The earlier deployment script placed files directly into `$MNT/scripts/`, `$MNT/usr/local/bin/`, and `$MNT/home/ubuntu/Desktop/` (which correspond to `/cow/scripts/`, `/cow/home/ubuntu/Desktop/`).
+* **Result:** Because the live rootfs exclusively displays files residing in `/cow/upper/`, all files outside `/upper/` were completely hidden from the running desktop and init process.
+
+### 9.4 Architectural Fixes Deployed
+1. **Dual-Target OverlayFS Deployment (`deploy_four_tier_persistence.sh`):**
+   - Rewrote deployment logic to inject binaries, launchers, and configurations into both `$MNT/upper/` (for live OverlayFS) and `$MNT/` (for raw fallback).
+   - Implemented triple-redundant storage auto-mounting:
+     * **Layer A (Systemd Service):** `/upper/etc/systemd/system/mount-storage-startup.service` enabled in `multi-user.target.wants/` to mount storage before user login.
+     * **Layer B (XDG Autostart):** `/upper/etc/xdg/autostart/mount-storage-startup.desktop`.
+     * **Layer C (Openbox Native):** Added startup triggers to `/upper/home/ubuntu/.config/openbox/autostart`, `autostart.sh`, and `/upper/etc/xdg/openbox/autostart`.
+   - Deployed desktop launchers with `--hold` retention to `/upper/home/ubuntu/Desktop/` (`Run_Backup_CLI.desktop`, `Post_Backup_Wizard.desktop`, `Mount_Storage.desktop`).
+   - Synchronized `id_rsa` into `/upper/scripts/id_rsa` and `/upper/home/ubuntu/.ssh/id_rsa` (`chmod 600`).
+2. **FAT Partition & Ventoy P1 Script Ecosystem Alignment:**
+   - Copied all core backup scripts from `Ventoy/` to `/ntfs/scripts/` and `/media/alan/Ventoy1/scripts/`:
+     * `run_rescuezilla_backup_cli.sh` (Interactive Clonezilla / Rescuezilla runner)
+     * `post-backup-wizard.sh` (Post-mortem diagnostic and validation wizard)
+     * `sda_rescue_backup.sh` (Emergency Clonezilla rescue runner for failing drive)
+     * `sda5_rescue_backup.sh` (Targeted Clonezilla rescue runner for sda5)
+     * `mount_home40_backup.sh` (SSHFS network share mount helper)
+     * `mount_fat_and_hdd.sh` (Storage mount helper)
+   - Isolated unrelated tools (`run_mosh` and `tailscale_setup.sh`) into a dedicated subfolder `network_and_remote_tools/`.
+   - Added clear documentation in `/ntfs/scripts/README.md`.
+3. **Sub-Repository Version Control Alignment (`ventoy-2-key/`):**
+   - Added all operational backup scripts and `persistence_startup/` launchers directly to `ventoy-2-key/`.
+   - Updated `README.md` with Sections 6.3 (OverlayFS Architecture) and 6.4 (Script Distribution Register).
+
+### 9.5 Test Suite Expansion & Audit Results
+Expanded `verify_ventoy2.sh` to 9 automated pre-boot test suites:
+* **Test 8 (FAT Partition Backup Scripts):** Verified `run_rescuezilla_backup_cli.sh` and `post-backup-wizard.sh` exist on `/ntfs/scripts/`. (**PASS**)
+* **Test 9 (Persistence Container OverlayFS Upper Layer):** Loop-mounted `rescuezilla-persistence.dat` and verified binaries in `/upper/scripts/` and launchers in `/upper/home/ubuntu/Desktop/`. (**PASS**)
+* All 9 test cases passed cleanly.
+
+### 9.6 Human-in-the-Loop (HITL) Artifact Review
+* **Artifact 1 (`persistence_investigation_and_repair_report_2026-09-04.md`):** User approved copying to version control; committed as `03eb682`.
+* **Artifact 2 (`screenshot_disks_fat_unmounted.png`):** User elected to skip; preserved on flash at `/ntfs/Screenshot_2026-09-04_18-59-37.png`.
+
+### 9.7 Updated Git Commit Register
+
+| Commit Hash | Message / Scope | Changed Files |
+| :--- | :--- | :--- |
+| `893ab79` | `fix(ventoy-2): fix OverlayFS persistence deployment, add Clonezilla & post-mortem scripts` | `deploy_four_tier_persistence.sh`, `verify_ventoy2.sh`, `README.md`, `run_rescuezilla_backup_cli.sh`, `post-backup-wizard.sh`, `sda_rescue_backup.sh`, `sda5_rescue_backup.sh`, `mount_home40_backup.sh`, `persistence_startup/` |
+| `03eb682` | `docs(ventoy-2): add persistence investigation and repair report artifact` | `ventoy-2-key/persistence_investigation_and_repair_report_2026-09-04.md` |
