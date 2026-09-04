@@ -59,3 +59,12 @@
 3. `setup_rescuezilla_persistence.sh` — initial single-pass persistence setup script.
 4. `deploy_four_tier_persistence.sh` — full Four-Tier deployment script.
 5. `session_notes_persistence_and_home40_mount.md` — this technical reference.
+
+---
+
+## 4. OverlayFS Deployment Refinement & Script Alignment (September 4, 2026 Update)
+
+* **OverlayFS Architecture (`upperdir=/cow/upper`):** Updated `deploy_four_tier_persistence.sh` to inject files into `/upper/` inside `rescuezilla-persistence.dat`. Files placed outside `/upper/` were invisible to the running live OS overlay union.
+* **Operational Script Mirroring:** Mirrored `run_rescuezilla_backup_cli.sh`, `post-backup-wizard.sh`, `sda_rescue_backup.sh`, `sda5_rescue_backup.sh`, and `mount_home40_backup.sh` to `/ntfs/scripts/`, `/media/alan/Ventoy1/scripts/`, and `ventoy-2-key/`.
+* **Tool Isolation:** Moved remote administration tools (`run_mosh`, `tailscale_setup.sh`) to `network_and_remote_tools/` with `/ntfs/scripts/README.md`.
+* **Verification Suite:** Added automated tests for FAT scripts and OverlayFS `/upper` integrity in `verify_ventoy2.sh` (all 9 tests passing).

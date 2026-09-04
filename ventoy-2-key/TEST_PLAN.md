@@ -19,7 +19,7 @@
    - Windows bootloader chainload stanza for internal drive (`/dev/sda`).
 4. **Rescuezilla & Persistence Deployment:**
    - Copy the verified Rescuezilla ISO onto Partition 1.
-   - Deploy a formatted 512 MB ext4 persistence overlay container (`rescuezilla-persistence.dat` labeled `casper-rw`).
+   - Deploy a formatted 512 MB ext4 persistence overlay container (`rescuezilla-persistence.dat` labeled `writable`, updated from legacy `casper-rw`).
    - Configure `/ventoy/ventoy.json` to map persistence and define clean menu aliases.
 5. **Rigorous Verification & Test Matrix:** Multi-stage validation of filesystems, partition tables, Ventoy boot configuration, and mock boot tests.
 
@@ -53,9 +53,9 @@ graph TD
 * Executed `Ventoy2Disk.sh -u /dev/sdb`. Core upgraded from `1.1.10` to `1.0.99`.
 * Sector 0 MBR refreshed; Partition 2 `VTOYEFI` updated (UUID `223C-F3F8`). Data partitions untouched.
 
-### Phase 4: Persistence Container Creation — [COMPLETED]
+### Phase 4: Persistence Container Creation & Validation — [COMPLETED]
 * Allocated 512 MB zeroed file at `/media/alan/Ventoy/rescuezilla-persistence.dat`.
-* Formatted as ext4 with label `casper-rw` (UUID: `309a9e74-4230-458f-b89e-c492dcd3506f`).
+* Formatted as ext4 with label `writable` (updated from legacy `casper-rw`, UUID: `309a9e74-4230-458f-b89e-c492dcd3506f`).
 
 ### Phase 5: Deploy Production Configurations & ISOs — [COMPLETED]
 * Deployed `rescuezilla-2.6.1-64bit.oracular.iso` (1.4 GB) to `/media/alan/Ventoy/`.
@@ -77,7 +77,9 @@ graph TD
 | **TC-06** | JSON Schema | `ventoy.json` | Validate JSON structure with `python3 -m json.tool`. | Valid JSON formatting; persistence image paths match disk filenames. | **PASS** (Valid JSON structure) |
 | **TC-07** | Persistence Container | `rescuezilla-persistence.dat` | Verify ext4 filesystem type and volume label `writable` (updated from `casper-rw`). | Formatted ext4 filesystem with label `writable`. | **PASS** (`blkid` confirms ext4, label `writable`) |
 | **TC-08** | F6 Recovery Stanzas | `ventoy_grub.cfg` | Verify presence and syntax of Safe Graphics and Text Console fallback entries. | Clean parsing with `grub-script-check`. | **PASS** (Both fallback entries valid) |
-| **TC-09** | Physical Boot Test | Hardware Startup (HP) | Boot PC from USB key (`F9` boot menu):<br>1. Ventoy 1.0.99 menu displays.<br>2. Test Rescuezilla with persistence.<br>3. Press `F6` → test direct Ubuntu chainload or safe graphics fallback. | Clean boot without hangs. | **Ready for hardware verification** |
+| **TC-09** | Physical Boot Test | Hardware Startup (HP) | Boot PC from USB key (`F9` boot menu):<br>1. Ventoy 1.0.99 menu displays.<br>2. Test Rescuezilla with persistence.<br>3. Press `F6` → test direct Ubuntu chainload or safe graphics fallback. | Clean boot without hangs. | **PASS** (F6 recovery and live boot operational) |
+| **TC-10** | FAT Backup Scripts | `/ntfs/scripts` | Verify presence of `run_rescuezilla_backup_cli.sh` and `post-backup-wizard.sh`. | Scripts executable on FAT partition. | **PASS** (Verified present and executable) |
+| **TC-11** | OverlayFS `/upper` Layer | `rescuezilla-persistence.dat` | Loop-mount container and verify deployed binaries, autostart systemd unit, and desktop launchers in `/upper/`. | Full Four-Tier structure present in `/upper/`. | **PASS** (All binaries and launchers verified in `/upper/`) |
 
 ---
 

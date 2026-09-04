@@ -16,12 +16,14 @@ These files and configurations are pre-loaded inside `rescuezilla-persistence.da
 * **`Post_Backup_Wizard.desktop`:** Launches `sudo bash /scripts/post-backup-wizard.sh`.
 * **Window Persistence:** Configured with `xfce4-terminal --hold --geometry=105x32` so terminal windows remain open upon completion or error.
 
-### 3. Startup Mount Automation (`mount_ntfs_startup.sh`)
-* **Deployed to:** `/usr/local/bin/mount_ntfs_startup.sh`
-* **Direct User Mount:** Mounts `/dev/sdb4` (UUID `2C95D29B2DF0500E`) at `/media/ubuntu/2C95D29B2DF0500E` with `uid=1000,gid=1000,umask=000`, granting user `ubuntu` full graphical read/write access without permission barriers.
-* **Persistent Logging:** All execution steps and block device detection logs are mirrored to `/var/log/startup_ntfs.log` and `~/startup_ntfs.log`.
+### 3. Startup Mount Automation (`mount_storage_startup.sh`)
+* **Deployed to:** `/upper/usr/local/bin/mount_storage_startup.sh` (with symlink `/usr/local/bin/mount_ntfs_startup.sh` for backward compatibility).
+* **FAT32 Shared Partition Mount:** Mounts `/dev/sdb4` (UUID `C9D1-3C83`, `LABEL="SHARED FAT"`) at `/media/ubuntu/SHARED_FAT` with `uid=1000,gid=1000,umask=000`, granting user `ubuntu` full graphical read/write access without permission barriers. Creates desktop shortcut `/home/ubuntu/Desktop/SHARED_FAT_Storage` and symlinks `~/shared_fat` and `~/ntfs_usb`.
+* **Internal HDD Mount:** Mounts `/dev/sda5` read-only at `/media/ubuntu/Internal_HDD` with desktop shortcut `/home/ubuntu/Desktop/Internal_HDD`.
+* **Persistent Logging:** All execution steps and block device detection logs are mirrored to `/var/log/startup_storage.log` and `~/startup_storage.log`.
 
-### 4. Multi-Layer Startup Triggers
-* **Systemd Unit:** `/etc/systemd/system/mount-ntfs.service` (enabled in `multi-user.target.wants/`).
-* **Openbox Native:** Appended to `~/.config/openbox/autostart` and `/etc/xdg/openbox/autostart`.
-* **XDG Fallback:** `~/.config/autostart/mount-ntfs.desktop`.
+### 4. Multi-Layer Startup Triggers (OverlayFS `/upper/`)
+* **Casper OverlayFS:** All persistent artifacts are deployed into `/upper/` inside `rescuezilla-persistence.dat` to ensure visibility under Casper's OverlayFS root union.
+* **Systemd Unit:** `/upper/etc/systemd/system/mount-storage-startup.service` (enabled in `multi-user.target.wants/`).
+* **Openbox Native:** Appended to `/upper/home/ubuntu/.config/openbox/autostart`, `autostart.sh`, and `/upper/etc/xdg/openbox/autostart`.
+* **XDG Desktop Autostart:** `/upper/etc/xdg/autostart/mount-storage-startup.desktop`.

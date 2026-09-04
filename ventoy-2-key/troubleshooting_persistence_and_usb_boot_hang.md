@@ -56,3 +56,26 @@ Selecting installed Ubuntu 22.04 LTS on `/dev/sdb3` from the Ventoy F6 custom me
    Added two fallback boot entries to `/media/alan/Ventoy/ventoy_grub.cfg` and the repository:
    - `🟢 Direct Linux Kernel Boot - Safe Graphics (nomodeset)`: Boots full GUI with software rendering, bypassing KMS GPU driver crashes.
    - `🟢 Direct Linux Kernel Boot - Text Console`: Boots directly to a text TTY login (`systemd.unit=multi-user.target`).
+
+---
+
+## 3. Casper OverlayFS Invisibility & FAT Script Synchronization
+
+### 3.1 Problem Diagnosis
+When booting Rescuezilla 2.6.1 Live with persistence:
+1. The desktop loaded in its default state without custom launchers or storage shortcuts, and partition 4 (`SHARED FAT`) was not mounted automatically.
+2. When `/dev/sdb4` was manually mounted, expected Clonezilla scripts (`run_rescuezilla_backup_cli.sh`, `sda_rescue_backup.sh`) and post-mortem wizard (`post-backup-wizard.sh`) were missing from `/scripts/`, while unrelated tools (`run_mosh`, `tailscale_setup.sh`) were present.
+
+### 3.2 Root Cause Analysis
+1. **Casper OverlayFS Mechanism:**
+   - Modern Casper (Ubuntu 24.10) sets up root persistence via OverlayFS with `upperdir=/cow/upper` and `workdir=/cow/work`.
+   - The previous deployment script wrote directly to `$MNT/scripts/` and `$MNT/home/ubuntu/Desktop/` (outside `/upper/`).
+   - Because the live system only mounts `/cow/upper/` as its writable overlay layer, files in raw `/cow/` were completely hidden from the running desktop.
+2. **FAT Partition Script Gap:**
+   - The Clonezilla runners and post-mortem wizard were preserved in `Ventoy/` but had never been copied to the FAT32 partition (`/ntfs/scripts/`).
+
+### 3.3 Resolutions Executed
+1. **Dual-Target OverlayFS Deployment:** Updated `deploy_four_tier_persistence.sh` to inject scripts, launchers, and autostart configurations into both `$MNT/upper/` (live overlay layer) and `$MNT/` (raw fallback).
+2. **Triple-Redundant Storage Auto-Mount:** Deployed systemd service unit (`mount-storage-startup.service` in `multi-user.target.wants/`), XDG desktop autostart, and Openbox autostart to automatically mount `/dev/sdb4` (`SHARED FAT`) and `/dev/sda5` (`Internal_HDD`, read-only).
+3. **Script Ecosystem Mirroring:** Copied all backup and post-mortem scripts to `/ntfs/scripts/`, `/media/alan/Ventoy1/scripts/`, and `ventoy-2-key/`. Isolated peripheral utilities into `network_and_remote_tools/` with `/ntfs/scripts/README.md`.
+4. **Automated Verification:** Added Tests 8 and 9 to `verify_ventoy2.sh` to validate FAT script presence and OverlayFS `/upper` integrity on every audit pass.
