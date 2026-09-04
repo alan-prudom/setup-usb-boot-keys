@@ -171,7 +171,8 @@ echo "     (Note: Scan takes 30-60 minutes on a 426GB partition)"
 read -r -p "  Run badblocks scan on sda5? [y/N]: " run_bb
 run_bb="${run_bb:-N}"
 
-if [[ "$run_bb" =~ ^[Yy]$ ]]; then
+case "$run_bb" in [Yy]*) run_bb_flag=1 ;; *) run_bb_flag=0 ;; esac
+if [ "$run_bb_flag" -eq 1 ]; then
     BB_LOG="${LOG_DIR}/sda5_badblocks_${TIMESTAMP}.txt"
     echo "  Starting read-only badblocks scan on /dev/sda5..."
     badblocks -v -s -o "$BB_LOG" /dev/sda5 2>&1 | tee /tmp/bb_live.txt

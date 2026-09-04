@@ -55,12 +55,19 @@ prompt_choice() {
             echo -e "  ${YELLOW}⚠️  Empty input (Return key) is not accepted. Please type a number between ${min_val} and ${max_val}.${RESET}" >&2
             continue
         fi
-        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge "$min_val" ] && [ "$choice" -le "$max_val" ]; then
-            echo "$choice"
-            return 0
-        else
-            echo -e "  ${RED}⚠️  Invalid option '$choice'. Please type a number between ${min_val} and ${max_val}.${RESET}" >&2
-        fi
+        case "$choice" in
+            *[!0-9]*|"")
+                echo -e "  ${RED}⚠️  Invalid option '$choice'. Please type a number between ${min_val} and ${max_val}.${RESET}" >&2
+                ;;
+            *)
+                if [ "$choice" -ge "$min_val" ] && [ "$choice" -le "$max_val" ]; then
+                    echo "$choice"
+                    return 0
+                else
+                    echo -e "  ${RED}⚠️  Invalid option '$choice'. Please type a number between ${min_val} and ${max_val}.${RESET}" >&2
+                fi
+                ;;
+        esac
     done
 }
 

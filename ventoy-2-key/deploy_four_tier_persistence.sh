@@ -174,17 +174,18 @@ XDG_EOF
     chmod 644 "$TDIR/etc/xdg/autostart/mount-storage-startup.desktop"
 
     # C) Openbox native autostart
-    mkdir -p "$TDIR/etc/xdg/openbox" "$TDIR/home/ubuntu/.config/openbox"
-    touch "$TDIR/etc/xdg/openbox/autostart" "$TDIR/home/ubuntu/.config/openbox/autostart" "$TDIR/home/ubuntu/.config/openbox/autostart.sh"
+    # Clean any user-level calls to mount_storage_startup.sh (already managed by system-level systemd service)
     for ob_file in "$TDIR/etc/xdg/openbox/autostart" "$TDIR/home/ubuntu/.config/openbox/autostart" "$TDIR/home/ubuntu/.config/openbox/autostart.sh"; do
-        if ! grep -q "mount_storage_startup.sh" "$ob_file" 2>/dev/null; then
-            echo -e "\n/usr/local/bin/mount_storage_startup.sh &" >> "$ob_file"
+        if [ -f "$ob_file" ]; then
+            sed -i '/mount_storage_startup/d' "$ob_file" 2>/dev/null || true
         fi
-        chmod +x "$ob_file" 2>/dev/null || true
     done
 
     # 4. Tier 4: Desktop Launchers
     mkdir -p "$TDIR/home/ubuntu/Desktop"
+    # Remove obsolete desktop entries that produce "no valid Exec line" error
+    rm -f "$TDIR/home/ubuntu/Desktop/mount-ntfs.desktop" "$TDIR/etc/xdg/autostart/mount-ntfs.desktop"
+
     if [ -d "${SCRIPT_DIR}/persistence_startup" ]; then
         cp "${SCRIPT_DIR}/persistence_startup/"*.desktop "$TDIR/home/ubuntu/Desktop/"
         find "$TDIR/home/ubuntu/Desktop" -maxdepth 1 -type f -name "*.desktop" -exec chmod +x {} +
