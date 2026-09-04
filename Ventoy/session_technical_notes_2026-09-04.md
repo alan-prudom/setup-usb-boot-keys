@@ -193,3 +193,32 @@ A prompt is provided allowing the user to run or skip the 30–60 minute surface
    * Prompts for optional `badblocks` scan.
    * Captures post-rescue SMART snapshot and writes execution summary env file.
 4. **Completion**: Terminal window holds open upon completion. Press any key to close, then reboot via **`F6`** into installed Ubuntu.
+
+---
+
+## 7. Human-in-the-Loop (HITL) Artifact Evaluation & Repository Policy Decision
+
+### 7.1 Background & Mandate
+The user requested a formal review of all conversational image artifacts captured during the troubleshooting sessions, asking to present each with a human-friendly name, a diagnostic summary, and an explicit Yes/No prompt to decide if each should be tracked in Git version control.
+
+### 7.2 Evaluated Artifact Catalog
+Ten visual diagnostic milestones were audited:
+1. `01_gui_sshfs_password_auth_reset_error.png`: Rescuezilla GUI password authentication rejected on `192.168.1.34`.
+2. `02_gui_samba_unc_colon_syntax_error.png`: Samba CIFS UNC hostname resolution failure due to colon syntax.
+3. `03_gui_local_drive_missing_mount_point.png`: GUI block device selector omitting local directory mount points (`/mnt/backup`).
+4. `04_gui_windows_ntfs_dirty_readonly_error.png`: Dirty NTFS Windows journal error preventing image creation on `/dev/sda2`.
+5. `05_gnome_disks_sdb4_unmounted_state.png`: Baseline USB partition layout with `sdb4` unmounted.
+6. `06_gnome_disks_sdb4_mounted_to_media.png`: Partition `sdb4` mounted via UDisks to `/media/ubuntu/2C95D29B2DF0500E`.
+7. `07_rescuezillapy_single_instance_lock_error.png`: Rescuezillapy single-instance lock collision with the running GUI.
+8. `08_gnome_disks_sdb1_ventoy_busy_lock_modal.png`: GNOME Disks `/dev/sdb1` busy lock error (held by live ISO loop device).
+9. `09_terminal_backup_cli_status_127_held_window.png`: Terminal launcher Status 127 command not found held window.
+10. `10_gparted_sdb4_key_icon_vs_sdb1_warning.png`: GParted device inspection showing `sdb4` mounted with active key icon vs `sdb1` warning.
+
+### 7.3 Formal HITL Decision: "No to All"
+* **User Directive**: The user explicitly instructed **`no to all`**.
+* **Policy Applied**:
+  * **Zero Binary Bloat**: All PNG image files are strictly excluded from Git tracking.
+  * **Repository Integrity**: The repository maintains a fast, lightweight footprint consisting exclusively of plain-text code, shell scripts, Markdown documentation, and reproducible sector blueprints.
+  * **Local Preservation**: Raw visual files remain available in local temporary media storage and physical NTFS storage for diagnostic reference without permanently bloating the remote `.git/` object database.
+EOF
+
