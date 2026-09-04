@@ -57,7 +57,23 @@ echo -n "[TEST] Validating ventoy.json syntax... "
 python3 -m json.tool "${SCRIPT_DIR}/ventoy.json" >/dev/null
 echo "PASS"
 
-# 6. Check MBR Signature
+# 6. Check Persistence Container Label
+echo -n "[TEST] Checking persistence container label ('writable')... "
+persist_file="/media/alan/Ventoy/rescuezilla-persistence.dat"
+[ ! -f "$persist_file" ] && persist_file="/media/alan/Ventoy1/rescuezilla-persistence.dat"
+if [ -f "$persist_file" ]; then
+    persist_label=$(blkid -s LABEL -o value "$persist_file" 2>/dev/null || true)
+    if [ "$persist_label" == "writable" ]; then
+        echo "PASS (Label is 'writable')"
+    else
+        echo "FAIL: Expected 'writable', found '$persist_label'"
+        exit 1
+    fi
+else
+    echo "SKIP (Ventoy partition not mounted)"
+fi
+
+# 7. Check MBR Signature
 echo -n "[TEST] Checking MBR boot signature (0x55AA)... "
 if [ -r "$DEV" ]; then
     mbr_sig=$(dd if="$DEV" bs=1 skip=510 count=2 2>/dev/null | xxd -p)

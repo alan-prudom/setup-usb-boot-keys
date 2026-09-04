@@ -149,24 +149,81 @@ Created and activated a user-level systemd service:
 | `ventoy-2-key/setup_rescuezilla_persistence.sh` | Standalone script for loop-mounting and initial population of `rescuezilla-persistence.dat`. | Repo, `/ntfs/scripts/`, `/media/alan/Ventoy1/scripts/` |
 | `ventoy-2-key/deploy_four_tier_persistence.sh` | Master deployment tool injecting Tier 1-4 redundancy into the persistence overlay. | Repo, `/ntfs/scripts/`, `/media/alan/Ventoy1/scripts/` |
 | `ventoy-2-key/session_notes_persistence_and_home40_mount.md` | Summary documentation of persistence repair and SSHFS service setup. | Repo |
-| `ventoy-2-key/README.md` | Updated metadata status date to Sept 4, 2026 and appended Section 6 specification. | Repo |
+| `ventoy-2-key/troubleshooting_persistence_and_usb_boot_hang.md` | Root cause analysis and fixes for Rescuezilla persistence label (`casper-rw` -> `writable`) and USB Ubuntu Xorg display crash. | Repo |
+| `ventoy-2-key/ventoy_grub.cfg` | Added Safe Graphics (`nomodeset`) and Text Console (`systemd.unit=multi-user.target`) recovery stanzas. | Repo, `/media/alan/Ventoy/` |
+| `ventoy-2-key/verify_ventoy2.sh` | Added test for persistence container volume label 'writable'. | Repo |
+| `ventoy-2-key/README.md` | Updated persistence label spec to `writable` and added Section 4.2 fallback recovery stanzas. | Repo |
 | `ventoy-2-key/comprehensive_technical_session_notes_2026-09-04.md` | This document; full narrative and technical reference of all session decisions and actions. | Repo |
 
 ---
 
-## 7. Verification & Operational Instructions
+## 7. Topic 5: Rescuezilla Persistence Relabeling (`writable`) & USB Ubuntu Hang Resolution
 
-### 7.1 Booting Rescuezilla via Ventoy
-1. Reboot and select the USB drive.
+### 7.1 Rescuezilla Persistence Label Upgrade
+* **Background & Problem:** After deploying the Four-Tier Redundancy scripts, Rescuezilla 2.6.1 booted with persistence still showed an unmounted storage environment and did not retain changes across reboots.
+* **Technical Root Cause:**
+  1. `rescuezilla-2.6.1-64bit.oracular.iso` is built on Ubuntu 24.10 (Oracular Oriole).
+  2. In modern Ubuntu live releases (Ubuntu 20.04+, and specifically 24.04/24.10), Casper deprecated the historical volume label `casper-rw` and requires persistent ext4 overlay filesystems to be labeled **`writable`**.
+  3. `rescuezilla-persistence.dat` on Partition 1 (`/dev/sdb1`) was originally formatted with `LABEL="casper-rw"`. As a result, Casper skipped the persistence container during initramfs discovery and loaded purely into RAM.
+* **Actions Taken:**
+  1. Ran `/sbin/e2label /media/alan/Ventoy/rescuezilla-persistence.dat writable`.
+  2. Verified filesystem with `blkid`:
+     ```text
+     /media/alan/Ventoy/rescuezilla-persistence.dat: LABEL="writable" UUID="309a9e74-4230-458f-b89e-c492dcd3506f" TYPE="ext4"
+     ```
+  3. Updated `verify_ventoy2.sh` to add an automated test verifying the persistence container volume label is `writable`.
+
+### 7.2 USB Ubuntu Boot Hang & GDM / Xorg Crash
+* **Background & Problem:** When booting the installed Ubuntu 22.04 LTS OS on the USB key via the Ventoy custom menu (**`F6`**), the boot process hung indefinitely before the login desktop appeared.
+* **Investigation & Startup Log Audit:**
+  Inspected `/var/log/boot.log` and `/var/log/syslog` from the USB root filesystem (`/media/alan/e0d8ad1a-410b-4245-9192-66d2a16077b9/`):
+  1. **Remote Filesystem (`home40` / SSHFS):**
+     - The entry `alan@192.168.1.34:/media/alan/home40` in `/etc/fstab` utilized `x-systemd.automount,_netdev`.
+     - Systemd successfully set up the automount socket without blocking boot. However, background services (`gvfs-udisks2-volume-monitor`, `pool`) repeatedly queried the directory while offline, throwing continuous `status=1/FAILURE` error loops.
+  2. **Display Server Fatal Crash (GDM3 / Xorg):**
+     - The real hang was caused by a fatal Xorg display server crash.
+     - When GDM launched `/usr/libexec/gdm-x-session`, hardware acceleration was attempted via Modesetting + Glamor/EGL on the Intel GPU (`/dev/dri/card1`).
+     - `glamor_egl_init` crashed in `gbm_create_device` through `libLLVM-15.so.1`:
+       ```text
+       alan-USB-zbook /usr/libexec/gdm-x-session[1257]: (EE) Backtrace:
+       alan-USB-zbook /usr/libexec/gdm-x-session[1257]: (EE) 0: /usr/lib/xorg/Xorg (OsLookupColor+0x139)
+       alan-USB-zbook /usr/libexec/gdm-x-session[1257]: (EE) 1: /lib/x86_64-linux-gnu/libc.so.6 (__sigaction+0x50)
+       alan-USB-zbook /usr/libexec/gdm-x-session[1257]: (EE) 2: /lib/x86_64-linux-gnu/libLLVM-15.so.1
+       alan-USB-zbook /usr/libexec/gdm-x-session[1257]: (EE) 20: /lib/x86_64-linux-gnu/libgbm.so.1 (gbm_create_device+0x48)
+       alan-USB-zbook /usr/libexec/gdm-x-session[1257]: (EE) 21: /usr/lib/xorg/modules/libglamoregl.so (glamor_egl_init+0x67)
+       alan-USB-zbook /usr/libexec/gdm-x-session[1257]: Fatal server error: (EE) Server terminated with error (1)
+       alan-USB-zbook gdm3: Gdm: GdmLocalDisplayFactory: maximum number of X display failures reached: check X server log for errors
+       ```
+     - After multiple crash iterations, GDM reached its failure threshold and aborted, leaving the console frozen at Plymouth or a black screen.
+* **Actions Taken:**
+  1. **Cleaned `/etc/fstab`:** Removed the redundant SSHFS mount line from `/media/alan/e0d8ad1a-410b-4245-9192-66d2a16077b9/etc/fstab` (backed up to `fstab.bak`). Remote storage is now cleanly and solely managed after login by `~/.config/systemd/user/mount-home40.service`.
+  2. **GDM Configuration:** Explicitly configured `WaylandEnable=false` in `/etc/gdm3/custom.conf` on the USB partition.
+  3. **Resilient F6 Recovery Menu Stanzas (`ventoy_grub.cfg`):**
+     Added two fallback entries to `ventoy_grub.cfg` (synced to both the repo and `/media/alan/Ventoy/`):
+     - `🟢 Direct Linux Kernel Boot - Safe Graphics (nomodeset)`: Boots the full OS and desktop using software rendering / standard framebuffer without Intel KMS acceleration.
+     - `🟢 Direct Linux Kernel Boot - Text Console (systemd.unit=multi-user.target)`: Boots directly into a text TTY console without loading GDM/Xorg, allowing user login and recovery commands (`sudo systemctl start gdm3` or `startx`).
+
+---
+
+## 8. Verification & Operational Instructions
+
+### 8.1 Booting Rescuezilla via Ventoy
+1. Reboot and select the USB drive via the BIOS/UEFI boot menu (`F9`).
 2. In the Ventoy menu, select **`>>> Rescuezilla 2.6.1 Live GUI (+Persistence)`**.
 3. Choose **Boot with persistence**.
 4. Upon desktop initialization:
+   * Casper loads and commits root overlay writes to `rescuezilla-persistence.dat` (labeled `writable`).
    * `mount_storage_startup.sh` executes via Openbox autostart.
    * `SHARED_FAT_Storage` and `Internal_HDD` shortcuts appear on `/home/ubuntu/Desktop`.
    * `Run_Backup_CLI` and `Post_Backup_Wizard` desktop shortcuts execute directly with terminal hold.
 
-### 7.2 Normal Booting into USB Ubuntu 22.04 LTS
-1. At the Ventoy menu, press **`F6`** (or select installed Ubuntu on `/dev/sdb3`).
-2. The system boots into the installed USB OS.
-3. `mount-home40.service` initializes on user login, mounting `home40` at `~/mnt/apelite`.
+### 8.2 Normal & Recovery Booting into USB Ubuntu 22.04 LTS
+1. At the Ventoy menu, press **`F6`**.
+2. Select your boot method:
+   * **`🟢 Boot Installed Ubuntu 22.04 LTS`**: Standard chainload of GRUB.
+   * **`🟢 Direct Linux Kernel Boot - Safe Graphics (nomodeset)`**: Direct kernel boot with software rendering fallback if Intel GPU modesetting / Glamor fails. Directly displays the graphical login screen.
+   * **`🟢 Direct Linux Kernel Boot - Text Console`**: Boots directly into a multi-user text terminal (`systemd.unit=multi-user.target`).
+     * From the text console, log in as `alan`.
+     * Start the graphical desktop with: `sudo systemctl start gdm3` or run a direct X session with `startx`.
+3. Once logged in, `mount-home40.service` initializes automatically, mounting `home40` at `~/mnt/apelite`.
 4. `~/GitHub` resolves immediately to all active repositories.

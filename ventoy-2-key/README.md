@@ -56,12 +56,13 @@ This physical USB drive (`/dev/sdb`) has been upgraded in-place to **Ventoy 2**.
 
 1. **`rescuezilla-persistence.dat`**:
    - Size: 512 MB
-   - Filesystem: `ext4`, Volume Label: `casper-rw`
+   - Filesystem: `ext4`, Volume Label: `writable` (updated from legacy `casper-rw` to comply with Ubuntu 24.10 Oracular / Casper spec)
    - UUID: `309a9e74-4230-458f-b89e-c492dcd3506f`
    - Automatically mapped to Rescuezilla via `ventoy.json`.
 2. **`ventoy/ventoy_grub.cfg` & `ventoy_grub.cfg`**:
    - Custom F6 direct-boot configuration.
-   - Searches for UUID `e0d8ad1a-410b-4245-9192-66d2a16077b9` to chainload `/boot/grub/grub.cfg` or direct kernel (`/boot/vmlinuz`).
+   - Searches for UUID `e0d8ad1a-410b-4245-9192-66d2a16077b9` to chainload `/boot/grub/grub.cfg`.
+   - Direct fallback boot entries: Safe Graphics (`nomodeset` software rendering) and Text Console (`systemd.unit=multi-user.target`).
    - Chainloads internal Windows (`/bootmgr`).
 3. **`ventoy/ventoy.json`**:
    - Plugin mapping for persistence containers.
@@ -89,8 +90,9 @@ Located in `/media/alan/SHARED FAT/Archived_ISOs/`:
 ### 4.2 Instant F6 Boot to Installed Linux OS (`/dev/sdb3`)
 1. At the Ventoy boot menu, press **`F6`**.
 2. Select:
-   * **`🟢 Boot Installed Ubuntu 22.04 LTS (Ubuntu-USB-Ventoy on /dev/sdb3)`**
-3. System instantly chainloads `/boot/grub/grub.cfg` from UUID `e0d8ad1a-410b-4245-9192-66d2a16077b9` without needing SuperGrub scanning.
+   * **`🟢 Boot Installed Ubuntu 22.04 LTS (Ubuntu-USB-Ventoy on /dev/sdb3)`**: System instantly chainloads `/boot/grub/grub.cfg` from UUID `e0d8ad1a-410b-4245-9192-66d2a16077b9`.
+   * **`🟢 Direct Linux Kernel Boot - Safe Graphics (nomodeset)`**: Direct kernel boot with software rendering fallback if Intel GPU modesetting / Glamor fails.
+   * **`🟢 Direct Linux Kernel Boot - Text Console`**: Boots directly into multi-user text terminal (`systemd.unit=multi-user.target`) for maintenance without starting GDM3/Xorg.
 
 ### 4.3 Windows Chainload
 1. At the Ventoy boot menu, press **`F6`**.

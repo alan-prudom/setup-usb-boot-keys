@@ -75,8 +75,9 @@ graph TD
 | **TC-04** | Installed OS Integrity | `/dev/sdb3` (Ubuntu 22.04) | Mount `sdb3` and check root filesystem directories and kernel. | Full Linux rootfs intact; kernel `vmlinuz` and `initrd.img` present. | **PASS** (Clean ext4 rootfs intact) |
 | **TC-05** | F6 GRUB Syntax | `ventoy_grub.cfg` | Validate GRUB configuration syntax using `grub-script-check`. | Zero syntax errors. All UUIDs match target partition. | **PASS** (`grub-script-check` passed with exit code 0) |
 | **TC-06** | JSON Schema | `ventoy.json` | Validate JSON structure with `python3 -m json.tool`. | Valid JSON formatting; persistence image paths match disk filenames. | **PASS** (Valid JSON structure) |
-| **TC-07** | Persistence Container | `rescuezilla-persistence.dat` | Verify ext4 filesystem type and volume label `casper-rw`. | Formatted ext4 filesystem with label `casper-rw`. | **PASS** (`file` confirms Linux ext4, label `casper-rw`) |
-| **TC-08** | Physical Boot Test | Hardware Startup (HP) | Boot PC from USB key (`F9` boot menu):<br>1. Ventoy 1.0.99 menu displays.<br>2. Press `F6` → custom menu loads.<br>3. Select Ubuntu `sdb3` → boots directly to desktop. | Clean boot without requiring SuperGrub scanner. | **Ready for hardware verification** |
+| **TC-07** | Persistence Container | `rescuezilla-persistence.dat` | Verify ext4 filesystem type and volume label `writable` (updated from `casper-rw`). | Formatted ext4 filesystem with label `writable`. | **PASS** (`blkid` confirms ext4, label `writable`) |
+| **TC-08** | F6 Recovery Stanzas | `ventoy_grub.cfg` | Verify presence and syntax of Safe Graphics and Text Console fallback entries. | Clean parsing with `grub-script-check`. | **PASS** (Both fallback entries valid) |
+| **TC-09** | Physical Boot Test | Hardware Startup (HP) | Boot PC from USB key (`F9` boot menu):<br>1. Ventoy 1.0.99 menu displays.<br>2. Test Rescuezilla with persistence.<br>3. Press `F6` → test direct Ubuntu chainload or safe graphics fallback. | Clean boot without hangs. | **Ready for hardware verification** |
 
 ---
 
