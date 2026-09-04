@@ -87,6 +87,43 @@ else
     echo "SKIP (raw block device requires root/disk group to read Sector 0)"
 fi
 
+
+# 8. Check FAT Partition Backup Scripts
+echo -n "[TEST] Checking FAT partition backup scripts (/ntfs/scripts)... "
+fat_scripts_dir="/ntfs/scripts"
+[ ! -d "$fat_scripts_dir" ] && fat_scripts_dir="/media/ubuntu/SHARED_FAT/scripts"
+[ ! -d "$fat_scripts_dir" ] && fat_scripts_dir="/media/ubuntu/SHARED FAT/scripts"
+if [ -d "$fat_scripts_dir" ]; then
+    if [ -f "$fat_scripts_dir/run_rescuezilla_backup_cli.sh" ] && [ -f "$fat_scripts_dir/post-backup-wizard.sh" ]; then
+        echo "PASS (run_rescuezilla_backup_cli.sh & post-backup-wizard.sh present)"
+    else
+        echo "FAIL: Expected scripts missing from $fat_scripts_dir"
+        exit 1
+    fi
+else
+    echo "SKIP (FAT partition not mounted at expected path)"
+fi
+
+# 9. Check Persistence Container OverlayFS Upper Layer
+echo -n "[TEST] Checking persistence container OverlayFS upper layer... "
+if [ -f "$persist_file" ]; then
+    check_mnt="/mnt/verify_persist_$$"
+    mkdir -p "$check_mnt"
+    mount -o loop,ro "$persist_file" "$check_mnt" 2>/dev/null || true
+    if [ -f "$check_mnt/upper/scripts/run_rescuezilla_backup_cli.sh" ] && [ -f "$check_mnt/upper/home/ubuntu/Desktop/Run_Backup_CLI.desktop" ]; then
+        echo "PASS (OverlayFS /upper binaries and desktop shortcuts verified)"
+        umount "$check_mnt" 2>/dev/null || true
+        rmdir "$check_mnt" 2>/dev/null || true
+    else
+        echo "FAIL: OverlayFS /upper missing deployed scripts or desktop shortcuts!"
+        umount "$check_mnt" 2>/dev/null || true
+        rmdir "$check_mnt" 2>/dev/null || true
+        exit 1
+    fi
+else
+    echo "SKIP (persistence image not found)"
+fi
+
 echo "======================================================================"
 echo "          ALL PRE-BOOT CONFIGURATION AUDITS PASSED"
 echo "======================================================================"

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=🛡️ Post-Backup Diagnostic Wizard
+Comment=Inspect backup logs and disk telemetry
+Exec=xfce4-terminal --title="🛡️ Post-Backup Wizard" --hold --geometry=105x32 -e "bash -c 'if [ -f /scripts/post-backup-wizard.sh ]; then sudo bash /scripts/post-backup-wizard.sh; elif [ -f /usr/local/bin/post-backup-wizard.sh ]; then sudo bash /usr/local/bin/post-backup-wizard.sh; else candidate=\$(find /media /mnt /home -name post-backup-wizard.sh 2>/dev/null | head -n 1); if [ -n \"\$candidate\" ]; then sudo bash \"\$candidate\"; else echo \"Error: post-backup-wizard.sh not found.\"; fi; fi'"
+Icon=system-search
+Terminal=false
+StartupNotify=true

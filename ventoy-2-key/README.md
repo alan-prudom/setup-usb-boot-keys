@@ -14,7 +14,7 @@
 This physical USB drive (`/dev/sdb`) has been upgraded in-place to **Ventoy 2**. It provides full feature parity with the primary Ventoy 1 key:
 1. **Up-to-date Ventoy Core:** Refreshed in-place to `v1.0.99` on Sector 0 MBR and Partition 2 (`VTOYEFI`).
 2. **Instant F6 Direct Boot:** Custom GRUB configuration chainloads the installed Ubuntu 22.04 LTS OS on Partition 3 (`/dev/sdb3`), direct kernel fallback, and internal Windows (`/dev/sda`).
-3. **Rescuezilla Live GUI with Persistence:** Includes Rescuezilla 2.6.1 Live GUI accompanied by a formatted 512 MB `ext4` persistence overlay (`rescuezilla-persistence.dat` labeled `casper-rw`).
+3. **Rescuezilla Live GUI with Persistence:** Includes Rescuezilla 2.6.1 Live GUI accompanied by a formatted 512 MB `ext4` persistence overlay (`rescuezilla-persistence.dat` labeled `writable`).
 4. **Optimized Partition Capacity:** Archived legacy ISOs to Partition 4, maintaining **3.3 GB clean headroom** on Partition 1.
 
 ---
@@ -130,3 +130,16 @@ All scripts and configuration templates are tracked in git under `devices/setup-
 
 ### 6.2 Automatic Network Storage (`home40`)
 - Systemd user service `mount-home40.service` auto-mounts `192.168.1.34:/media/alan/home40` via SSHFS on boot, restoring access to linked Git workspaces.
+
+### 6.3 Casper OverlayFS Architecture & `/upper` Dual-Target Deployment
+- **Technical Insight:** Modern Ubuntu Casper (Ubuntu 24.10 / Rescuezilla 2.6.1) constructs rootfs using OverlayFS with `upperdir=/cow/upper` and `workdir=/cow/work`.
+- **Resolution:** `deploy_four_tier_persistence.sh` deploys binaries, autostart configurations, systemd services, and desktop launchers into both `$MNT/upper/` (live overlay layer) and `$MNT/` (raw container fallback).
+
+### 6.4 Tri-Tier Operational Script Distribution
+All Clonezilla imaging and post-mortem diagnostic tools are mirrored across three access points:
+1. **Live System Overlay:** `/scripts/` & `/usr/local/bin/` (and Desktop icons `Run_Backup_CLI.desktop`, `Post_Backup_Wizard.desktop`).
+2. **Shared FAT32 Partition:** `/ntfs/scripts/` (accessible under Rescuezilla at `/media/ubuntu/SHARED_FAT/scripts/`).
+3. **Ventoy Partition 1:** `/media/alan/Ventoy1/scripts/`.
+
+*(Note: Peripheral administrative tools `run_mosh` and `tailscale_setup.sh` are isolated into `network_and_remote_tools/` to eliminate clutter).*
+
