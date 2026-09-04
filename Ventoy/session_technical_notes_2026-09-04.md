@@ -196,29 +196,89 @@ A prompt is provided allowing the user to run or skip the 30–60 minute surface
 
 ---
 
-## 7. Human-in-the-Loop (HITL) Artifact Evaluation & Repository Policy Decision
+## 7. Successful Rescue Run Execution & Forensics (Sept 4, 11:22–17:06 UTC)
 
-### 7.1 Background & Mandate
-The user requested a formal review of all conversational image artifacts captured during the troubleshooting sessions, asking to present each with a human-friendly name, a diagnostic summary, and an explicit Yes/No prompt to decide if each should be tracked in Git version control.
+### 7.1 Operational Milestone
+Following deployment of `sda_rescue_backup.sh` with the `/home/partimag` bind-mount and the 50 GB pre-flight assertion, the user executed the rescue workflow targeting both damaged partitions: `sda2` (Windows 11 OS, 203.9 GB) and `sda5` (User Data, 426.2 GB).
 
-### 7.2 Evaluated Artifact Catalog
-Ten visual diagnostic milestones were audited:
-1. `01_gui_sshfs_password_auth_reset_error.png`: Rescuezilla GUI password authentication rejected on `192.168.1.34`.
-2. `02_gui_samba_unc_colon_syntax_error.png`: Samba CIFS UNC hostname resolution failure due to colon syntax.
-3. `03_gui_local_drive_missing_mount_point.png`: GUI block device selector omitting local directory mount points (`/mnt/backup`).
-4. `04_gui_windows_ntfs_dirty_readonly_error.png`: Dirty NTFS Windows journal error preventing image creation on `/dev/sda2`.
-5. `05_gnome_disks_sdb4_unmounted_state.png`: Baseline USB partition layout with `sdb4` unmounted.
-6. `06_gnome_disks_sdb4_mounted_to_media.png`: Partition `sdb4` mounted via UDisks to `/media/ubuntu/2C95D29B2DF0500E`.
-7. `07_rescuezillapy_single_instance_lock_error.png`: Rescuezillapy single-instance lock collision with the running GUI.
-8. `08_gnome_disks_sdb1_ventoy_busy_lock_modal.png`: GNOME Disks `/dev/sdb1` busy lock error (held by live ISO loop device).
-9. `09_terminal_backup_cli_status_127_held_window.png`: Terminal launcher Status 127 command not found held window.
-10. `10_gparted_sdb4_key_icon_vs_sdb1_warning.png`: GParted device inspection showing `sdb4` mounted with active key icon vs `sdb1` warning.
+* **Runtime**: 5 hours 44 minutes (11:22 UTC to 17:06 UTC).
+* **Overall Status**: Completed with **Exit Code 0** (`FINAL_EXIT_CODE="0"`).
+* **Storage Preservation**: The persistence overlay maintained a stable **213 MB free headroom (53% utilized)** throughout the entire stream, conclusively proving that images streamed across the LAN directly to `192.168.1.34:/media/alan/home40/Clonezilla/` without leaking to local media.
 
-### 7.3 Formal HITL Decision: "No to All"
-* **User Directive**: The user explicitly instructed **`no to all`**.
-* **Policy Applied**:
-  * **Zero Binary Bloat**: All PNG image files are strictly excluded from Git tracking.
-  * **Repository Integrity**: The repository maintains a fast, lightweight footprint consisting exclusively of plain-text code, shell scripts, Markdown documentation, and reproducible sector blueprints.
-  * **Local Preservation**: Raw visual files remain available in local temporary media storage and physical NTFS storage for diagnostic reference without permanently bloating the remote `.git/` object database.
-EOF
+### 7.2 Partition Salvage Statistics
+* **`sda2` (Windows 11, 203.9 GB)**:
+  * Destination Archive: `HP-ZBook-sda2-RESCUE-2026-09-04_112246-img/` (~95 GB in 25 split volumes, `.aa`–`.ay`).
+  * Bad Sectors Handled: Exactly **120 unreadable sectors** were skipped and zero-filled.
+  * Filesystem Outcome: Over 99.99% of filesystem metadata and operating system structures were recovered.
+* **`sda5` (Data Partition, 426.2 GB)**:
+  * Destination Archive: `HP-ZBook-sda5-RESCUE-2026-09-04_112246-img/` (~238 GB in 63 split volumes, `.aa`–`.ck`).
+  * Bad Sectors Handled: Exactly **144 unreadable sectors** were skipped and zero-filled.
+  * Filesystem Outcome: The entire remaining data volume was successfully captured.
+* **Total Rescued Image Volume**: **~333 GB of compressed Clonezilla images**.
 
+### 7.3 Surface Scan Analysis: `sda5` Badblocks Map
+The read-only surface scan (`badblocks -v -s -o /scripts/sda5_badblocks_2026-09-04_112246.txt /dev/sda5`) ran to completion:
+* **Artifact**: `sda5_badblocks_2026-09-04_112246.txt` (720 bytes).
+* **Detected Flaws**: Exactly **72 physical bad blocks** detected on `/dev/sda5`.
+* **Failure LBA Coordinates**:
+  * Block `309,843,524` through `309,843,867` (Sector Cluster A)
+  * Block `309,854,612` through `309,854,627` (Sector Cluster B)
+
+### 7.4 SMART Drive Health Post-Mortem
+Comparing SMART telemetry from pre-rescue (11:23 UTC) to post-rescue (16:06 UTC):
+* **Attribute 202 (`Percent_Lifetime_Remain`)**: Stagnant at **6%** (94% flash endurance exhausted).
+* **Attribute 187 (`Reported_Uncorrect`)**: Escalated dramatically from **35 to 1,030 uncorrectable errors** (+995 failures under read stress).
+* **Attribute 196 (`Reallocated_Event_Count`)**: Remained at **16**, confirming that the SSD controller's spare block pool is exhausted and can no longer remap decaying NAND sectors.
+
+---
+
+## 8. Internal Ubuntu Partition (`sda9`) Safety Audit & Isolation
+
+### 8.1 Objective
+Evaluate the viability of booting into the internal Ubuntu installation on `/dev/sda9` (which verified 100% clean with zero read errors during backup) while guaranteeing zero access to the damaged partitions (`sda2` and `sda5`).
+
+### 8.2 `/etc/fstab` Inspection
+Inspection of `/dev/sda9`'s `/etc/fstab` confirmed:
+* Mounts `/` via `UUID=ef46ba23-9c38-4173-8722-22c0a54301a5` (`sda9`).
+* Mounts `/boot/efi` via `UUID=CFC2-2038` (`sda8`).
+* Mounts swap via `/swapfile` on `sda9` (does not touch raw swap partition `sda6`).
+* **Neither `sda2` nor `sda5` are listed in `fstab`**.
+
+### 8.3 Installed Isolation Udev Rule
+To prevent desktop background services (UDisks2, GVFS, GNOME Tracker) from probing or auto-mounting the damaged partitions upon login, a dedicated hardware rule was installed on `sda9`:
+* **Path**: `/etc/udev/rules.d/99-block-failing-sda-partitions.rules` (on `sda9`)
+* **Content**:
+  ```udev
+  KERNEL=="sda2", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0", ENV{SYSTEMD_READY}="0"
+  KERNEL=="sda5", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0", ENV{SYSTEMD_READY}="0"
+  ENV{ID_FS_UUID}=="7EBC40A7BC405BB1", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0", ENV{SYSTEMD_READY}="0"
+  ENV{ID_FS_UUID}=="3FCA0C373DD6CF32", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0", ENV{SYSTEMD_READY}="0"
+  ```
+* **Effect**: Masks `sda2` and `sda5` from the desktop UI, disables automount, and suppresses systemd unit generation.
+
+---
+
+## 9. Default Boot Partition Analysis (`/dev/sda`)
+
+Inspection of the partition table, MBR boot code, and GRUB configuration on `/dev/sda` established:
+1. **MBR Active Flag**: Set on `/dev/sda1` (`SYSTEM`, Windows Boot Manager).
+2. **GRUB Master Config (`/boot/grub/grub.cfg` on `sda9`)**:
+   * Contains `set default="0"`.
+   * Menu entry 0 points to: `Ubuntu, with Linux 6.8.0-138-generic` on `/dev/sda9`.
+   * Menu entry 2 points to: `Windows 10 (on /dev/sda1)`.
+3. **Conclusion**: When booting in Legacy/CSM mode from `/dev/sda`, GRUB defaults automatically to **Ubuntu on `/dev/sda9`** without booting Windows.
+
+---
+
+## 10. Human-in-the-Loop (HITL) Artifact Review & Version Control Commit
+
+In accordance with user directives, all 10 conversational image artifacts were presented individually with diagnostic summaries and Yes/No prompts.
+
+* **Artifacts 1–4**: Skipped (Omitted from Git).
+* **Artifact 5 (`05_gnome_disks_sdb4_unmounted_state.png`, 83.1 KB)**: **Approved** — Preserves visual baseline of USB disk geometry in GNOME Disks.
+* **Artifact 6 (`06_gnome_disks_sdb4_mounted_to_media.png`, 94.9 KB)**: **Approved** — Preserves visual confirmation of NTFS mount path (`/media/ubuntu/2C95D29B2DF0500E`).
+* **Artifacts 7–10**: Skipped (Omitted from Git).
+
+### Commit Status
+* Both approved images were copied to `Ventoy/screenshots/` and committed to [`setup-usb-boot-keys`](https://github.com/alan-prudom/setup-usb-boot-keys) at commit `7cbe07d`.
+* Pushed to `origin/main` and mirrored to `~/Documents/setup-usb`.
