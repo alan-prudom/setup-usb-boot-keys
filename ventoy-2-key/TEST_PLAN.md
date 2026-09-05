@@ -82,6 +82,9 @@ graph TD
 | **TC-11** | OverlayFS `/upper` Layer | `rescuezilla-persistence.dat` | Loop-mount container and verify deployed binaries, autostart systemd unit, and desktop launchers in `/upper/`. | Full Four-Tier structure present in `/upper/`. | **PASS** (All binaries and launchers verified in `/upper/`) |
 | **TC-12** | Unified Rescue Suite | `rescue_suite_launcher.sh` | Validate 5 core functions (Backup, Restore, Clone, Verify, Image Explorer) and automated SSHFS network mounting. | Launcher handles network auto-mount, bind-mount to `/home/partimag`, and sub-tools. | **PASS** (Syntax validated, network and menu tested) |
 | **TC-13** | POSIX Shell Portability | Shell backup scripts | Validate execution of backup runners under Dash (`/bin/sh`) without syntax errors (`[[: not found`). | Strict POSIX syntax (`case` blocks) executes cleanly under Dash. | **PASS** (All runners verified with Dash) |
+| **TC-14** | VM Emulation Lab | `run_test_vm.sh` | Validate VM execution of Option A (Ventoy CoW overlay) and Option B (direct persistent kernel launch) with Native GTK and TigerVNC viewers. | VM boots cleanly, isolates host storage, and activates persistence. | **PASS** (Option A & B verified; screenshots captured) |
+| **TC-15** | SSH Automation in Persistence | `rescuezilla-persistence.dat` | Verify `ssh.service` is enabled in systemd multi-user target and started automatically on live boot. | Port 2222 connects cleanly from `stimulate_vm_tests.sh` using `/home/alan/.ssh/id_rsa`. | **PASS** (Auto-start verified) |
+
 
 
 ---

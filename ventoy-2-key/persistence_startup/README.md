@@ -32,3 +32,10 @@ These files and configurations are pre-loaded inside `rescuezilla-persistence.da
 * **Systemd Unit:** `/upper/etc/systemd/system/mount-storage-startup.service` (enabled in `multi-user.target.wants/`).
 * **Openbox Native:** Appended to `/upper/home/ubuntu/.config/openbox/autostart`, `autostart.sh`, and `/upper/etc/xdg/openbox/autostart`.
 * **XDG Desktop Autostart:** `/upper/etc/xdg/autostart/mount-storage-startup.desktop`.
+
+### 5. OpenSSH Daemon Auto-Start (`ssh.service`)
+* **Role:** Enables automated test harnesses and remote administrative access on port 22 immediately upon boot.
+* **Systemd Enablement:** Pre-linked at `/upper/etc/systemd/system/multi-user.target.wants/ssh.service`.
+* **Fallback Activation:** `mount_storage_startup.sh` executes `systemctl start ssh || /etc/init.d/ssh start` during boot.
+* **Authentication:** Pre-authorized with host user key `/home/ubuntu/.ssh/id_rsa` (`chmod 600`).
+
