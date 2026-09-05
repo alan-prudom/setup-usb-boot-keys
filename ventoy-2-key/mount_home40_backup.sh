@@ -17,8 +17,12 @@ if [ ! -f "$KEY_FILE" ]; then
     exit 1
 fi
 
-chmod 600 "$KEY_FILE"
-mkdir -p "$MOUNT_POINT"
+if [ -w "$KEY_FILE" ]; then
+    chmod 600 "$KEY_FILE" 2>/dev/null || true
+elif [ "$EUID" -ne 0 ]; then
+    sudo chmod 600 "$KEY_FILE" 2>/dev/null || true
+fi
+mkdir -p "$MOUNT_POINT" 2>/dev/null || sudo mkdir -p "$MOUNT_POINT"
 
 echo "Mounting $REMOTE_SERVER:$REMOTE_PATH to $MOUNT_POINT..."
 

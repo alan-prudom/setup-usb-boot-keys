@@ -125,10 +125,21 @@ else
         echo -e "${RED}Error: Rescuezilla ISO not found at $ISO_PATH${RESET}"
         exit 1
     fi
-    QEMU_ARGS+=(
-        -cdrom "$ISO_PATH"
-        -boot d
-    )
+    BOOT_DIR="/media/alan/Ventoy1/boot_cache"
+    if [ -f "${BOOT_DIR}/vmlinuz" ] && [ -f "${BOOT_DIR}/initrd.lz" ]; then
+        echo -e "  • Using direct kernel launch with persistent overlay parameter..."
+        QEMU_ARGS+=(
+            -kernel "${BOOT_DIR}/vmlinuz"
+            -initrd "${BOOT_DIR}/initrd.lz"
+            -append "boot=casper persistent quiet splash ---"
+            -cdrom "$ISO_PATH"
+        )
+    else
+        QEMU_ARGS+=(
+            -cdrom "$ISO_PATH"
+            -boot d
+        )
+    fi
     if [ -f "$PERSIST_IMG" ]; then
         echo -e "  • Attaching persistence container: $PERSIST_IMG"
         QEMU_ARGS+=(

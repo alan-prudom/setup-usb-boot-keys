@@ -135,6 +135,12 @@ if [ -b /dev/sda5 ]; then
     ln -sfn "$ACTUAL_SDA5" /home/ubuntu/Desktop/Internal_HDD
 fi
 
+# 3. Enable and start OpenSSH daemon for automated test harness
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl start ssh 2>/dev/null || systemctl restart ssh 2>/dev/null || true
+fi
+/etc/init.d/ssh start 2>/dev/null || true
+
 # Ensure user permissions
 chown -h 1000:1000 /home/ubuntu/Desktop/* 2>/dev/null || true
 chown 1000:1000 /home/ubuntu/shared_fat /home/ubuntu/ntfs_usb /home/ubuntu/internal_hdd 2>/dev/null || true
@@ -160,6 +166,15 @@ WantedBy=multi-user.target
 SVC_EOF
     chmod 644 "$TDIR/etc/systemd/system/mount-storage-startup.service"
     ln -sf "/etc/systemd/system/mount-storage-startup.service" "$TDIR/etc/systemd/system/multi-user.target.wants/mount-storage-startup.service"
+
+    # Enable SSH service in systemd
+    if [ -f "$TDIR/lib/systemd/system/ssh.service" ]; then
+        ln -sf "/lib/systemd/system/ssh.service" "$TDIR/etc/systemd/system/multi-user.target.wants/ssh.service"
+    elif [ -f "$TDIR/lib/systemd/system/sshd.service" ]; then
+        ln -sf "/lib/systemd/system/sshd.service" "$TDIR/etc/systemd/system/multi-user.target.wants/ssh.service"
+    else
+        ln -sf "/lib/systemd/system/ssh.service" "$TDIR/etc/systemd/system/multi-user.target.wants/ssh.service" 2>/dev/null || true
+    fi
 
     # B) XDG Desktop Autostart
     mkdir -p "$TDIR/etc/xdg/autostart"
