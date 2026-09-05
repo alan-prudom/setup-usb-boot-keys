@@ -139,7 +139,7 @@ else
         QEMU_ARGS+=(
             -kernel "${BOOT_DIR}/vmlinuz"
             -initrd "${BOOT_DIR}/initrd.lz"
-            -append "boot=casper persistent console=ttyS0 console=tty1 quiet splash ---"
+            -append "boot=casper persistent noprompt console=ttyS0 console=tty1 quiet splash ---"
             -cdrom "$ISO_PATH"
         )
     else

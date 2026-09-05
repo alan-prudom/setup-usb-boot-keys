@@ -81,6 +81,7 @@ for TDIR in "${TARGET_DIRS[@]}"; do
         "sda5_rescue_backup.sh" \
         "mount_home40_backup.sh" \
         "mount_fat_and_hdd.sh" \
+        "export_vm_and_system_logs_to_fat.sh" \
         "rescue_suite_launcher.sh"; do
         if [ -f "${SCRIPT_DIR}/${script_file}" ]; then
             cp "${SCRIPT_DIR}/${script_file}" "$TDIR/scripts/"
@@ -246,6 +247,23 @@ XDG_EOF
         cp "$SSH_KEY" "$TDIR/home/ubuntu/.ssh/id_rsa"
         cp "$SSH_KEY" "$TDIR/scripts/id_rsa"
         chmod 600 "$TDIR/home/ubuntu/.ssh/id_rsa" "$TDIR/scripts/id_rsa"
+    fi
+
+    # 6. Install OpenSSH Server Binaries into Persistence
+    if [ -d "/tmp/openssh_extract" ]; then
+        echo "  • Installing openssh-server binaries & config into $TDIR..."
+        mkdir -p "$TDIR/usr/sbin" "$TDIR/usr/lib/openssh" "$TDIR/etc/ssh" "$TDIR/etc/pam.d"
+        cp -a /tmp/openssh_extract/usr/sbin/sshd "$TDIR/usr/sbin/" 2>/dev/null || true
+        cp -a /tmp/openssh_extract/usr/lib/openssh/* "$TDIR/usr/lib/openssh/" 2>/dev/null || true
+        cp -a /tmp/openssh_extract/etc/ssh/* "$TDIR/etc/ssh/" 2>/dev/null || true
+        cp -a /tmp/openssh_extract/etc/pam.d/* "$TDIR/etc/pam.d/" 2>/dev/null || true
+        if [ -f "/tmp/openssh_extract/usr/share/openssh/sshd_config" ] && [ ! -f "$TDIR/etc/ssh/sshd_config" ]; then
+            cp "/tmp/openssh_extract/usr/share/openssh/sshd_config" "$TDIR/etc/ssh/sshd_config"
+        fi
+        chmod 755 "$TDIR/usr/sbin/sshd" "$TDIR/usr/lib/openssh/sftp-server" 2>/dev/null || true
+        # Enable root and ubuntu login without password restriction
+        sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' "$TDIR/etc/ssh/sshd_config" 2>/dev/null || true
+        sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' "$TDIR/etc/ssh/sshd_config" 2>/dev/null || true
     fi
 
     # Set proper permissions for user ubuntu

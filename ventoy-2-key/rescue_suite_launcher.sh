@@ -161,12 +161,13 @@ while true; do
     echo -e "  ${CYAN}[6]${RESET} 🌐 ${BOLD}Connect Network Storage${RESET} (Mount home40/Clonezilla share via SSHFS)"
     echo -e "  ${CYAN}[7]${RESET} 💾 ${BOLD}Mount Local Storage${RESET}     (Mount SHARED FAT and Internal HDD ro)"
     echo -e "  ${CYAN}[8]${RESET} 📋 ${BOLD}Post-Backup Wizard${RESET}      (Examine backup manifests & disk health)"
-    echo -e "  ${CYAN}[9]${RESET} 🖥️  ${BOLD}Launch Rescuezilla GUI${RESET}  (Native Rescuezilla graphical window)"
+    echo -e "  ${CYAN}[9]${RESET} 📦 ${BOLD}Export Diagnostic Bundle${RESET} (Harvest logs, serial & telemetry to SHARED FAT)"
+    echo -e "  ${CYAN}[10]${RESET} 🖥️  ${BOLD}Launch Rescuezilla GUI${RESET}  (Native Rescuezilla graphical window)"
     echo -e "  ${CYAN}[0]${RESET} 🚪 Exit"
     echo -e "${CYAN}======================================================================${RESET}"
 
     echo -e "${DIM}  ℹ️  Why choose from this menu: All tools automatically ensure your network backup share is connected to /home/partimag, preventing local memory/disk exhaustion.${RESET}"
-    choice=$(prompt_choice "  Enter your selection [0-9]: " 0 9)
+    choice=$(prompt_choice "  Enter your selection [0-10]: " 0 10)
 
     case "$choice" in
         1)
@@ -312,6 +313,19 @@ while true; do
             fi
             ;;
         9)
+            # Export Diagnostic Bundle
+            echo -e "\n${BOLD}>>> Harvesting and Exporting Diagnostic Bundle...${RESET}"
+            if [ -x /usr/local/bin/export_vm_and_system_logs_to_fat.sh ]; then
+                sudo /usr/local/bin/export_vm_and_system_logs_to_fat.sh
+            elif [ -x "${SCRIPT_DIR}/export_vm_and_system_logs_to_fat.sh" ]; then
+                sudo "${SCRIPT_DIR}/export_vm_and_system_logs_to_fat.sh"
+            elif [ -x "/scripts/export_vm_and_system_logs_to_fat.sh" ]; then
+                sudo "/scripts/export_vm_and_system_logs_to_fat.sh"
+            else
+                echo -e "${RED}export_vm_and_system_logs_to_fat.sh not found.${RESET}"
+            fi
+            ;;
+        10)
             # Native Rescuezilla GUI
             echo -e "\n${BOLD}>>> Launching Native Rescuezilla GUI...${RESET}"
             ensure_network_mount || true
