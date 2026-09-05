@@ -3,7 +3,7 @@ Version=1.0
 Type=Application
 Name=🚀 Run Backup Assistant (CLI)
 Comment=Automated Clonezilla & Rescuezilla Network Backup
-Exec=xfce4-terminal --title="🚀 Run Backup Assistant" --hold --geometry=105x32 -e "bash -c 'if [ -f /scripts/run_rescuezilla_backup_cli.sh ]; then sudo bash /scripts/run_rescuezilla_backup_cli.sh; elif [ -f /usr/local/bin/run_rescuezilla_backup_cli.sh ]; then sudo bash /usr/local/bin/run_rescuezilla_backup_cli.sh; else candidate=\$(find /media /mnt /home -name run_rescuezilla_backup_cli.sh 2>/dev/null | head -n 1); if [ -n \"\$candidate\" ]; then sudo bash \"\$candidate\"; else echo \"Error: run_rescuezilla_backup_cli.sh not found.\"; fi; fi'"
+Exec=xfce4-terminal --title="🚀 Run Backup Assistant" --hold --geometry=105x32 -e "sudo /usr/local/bin/run_rescuezilla_backup_cli.sh"
 Icon=utilities-terminal
 Terminal=false
 StartupNotify=true

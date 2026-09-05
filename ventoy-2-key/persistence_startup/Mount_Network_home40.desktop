@@ -3,7 +3,7 @@ Version=1.0
 Type=Application
 Name=🌐 Connect Network Storage (home40)
 Comment=Mount 192.168.1.34:/media/alan/home40/Clonezilla via SSHFS
-Exec=xfce4-terminal --title="🌐 Mount Network Backup" --hold -e "bash -c 'if [ -f /scripts/mount_home40_backup.sh ]; then sudo bash /scripts/mount_home40_backup.sh; else sudo /usr/local/bin/mount_home40_backup.sh; fi'"
+Exec=xfce4-terminal --title="🌐 Mount Network Backup" --hold -e "sudo /usr/local/bin/mount_home40_backup.sh"
 Icon=network-server
 Terminal=false
 StartupNotify=true

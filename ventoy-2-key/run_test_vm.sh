@@ -92,6 +92,13 @@ while true; do
     esac
 done
 
+# Telemetry Log Paths
+VM_SERIAL_LOG="/tmp/vm_serial_console.log"
+VM_QEMU_LOG="/tmp/qemu_rescuezilla_vm.log"
+rm -f "$VM_SERIAL_LOG" "$VM_QEMU_LOG" 2>/dev/null || true
+touch "$VM_SERIAL_LOG" "$VM_QEMU_LOG"
+chmod 666 "$VM_SERIAL_LOG" "$VM_QEMU_LOG" 2>/dev/null || true
+
 # Construct QEMU parameters
 QEMU_ARGS=(
     -enable-kvm
@@ -100,6 +107,7 @@ QEMU_ARGS=(
     -m "$RAM_SIZE"
     -netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22"
     -device "virtio-net-pci,netdev=net0"
+    -serial "file:${VM_SERIAL_LOG}"
 )
 
 # Configure Storage & Boot drives
@@ -183,15 +191,17 @@ if [ "$disp_choice" = "1" ]; then
     echo -e "${GREEN}✓ VM Starting!${RESET}"
     echo -e "  • Display: Native GTK Window (Press Ctrl+Alt+G to release mouse)"
     echo -e "  • SSH Port: localhost:${SSH_PORT} (Connect via: ssh -p ${SSH_PORT} ubuntu@localhost)"
+    echo -e "  • Serial Log: ${VM_SERIAL_LOG}"
+    echo -e "  • QEMU Log:   ${VM_QEMU_LOG}"
     echo -e "${GREEN}======================================================================${RESET}"
-    qemu-system-x86_64 "${QEMU_ARGS[@]}"
+    qemu-system-x86_64 "${QEMU_ARGS[@]}" 2>>"$VM_QEMU_LOG"
 else
     echo -e "\n[+] Launching QEMU with TigerVNC Server on localhost:${VNC_PORT}..."
     QEMU_ARGS+=(
         -vnc "127.0.0.1:1"
     )
     
-    qemu-system-x86_64 "${QEMU_ARGS[@]}" &
+    qemu-system-x86_64 "${QEMU_ARGS[@]}" 2>>"$VM_QEMU_LOG" &
     VM_PID=$!
     
     sleep 1
@@ -199,6 +209,8 @@ else
     echo -e "${GREEN}✓ VM Running in Background (PID: ${VM_PID})!${RESET}"
     echo -e "  • VNC Server: localhost:${VNC_PORT}"
     echo -e "  • SSH Port: localhost:${SSH_PORT} (Connect via: ssh -p ${SSH_PORT} ubuntu@localhost)"
+    echo -e "  • Serial Log: ${VM_SERIAL_LOG}"
+    echo -e "  • QEMU Log:   ${VM_QEMU_LOG}"
     echo -e "${GREEN}======================================================================${RESET}"
     
     echo -e "[*] Spawning TigerVNC Viewer..."
