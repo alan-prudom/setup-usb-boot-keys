@@ -72,60 +72,98 @@ CPUS="2"
 # Ensure root privileges for block device access
 if [ "$EUID" -ne 0 ]; then
     echo -e "${RED}Error: This script must be run with sudo for KVM and block device access.${RESET}"
-    echo "Usage: sudo $0"
+    echo "Usage: sudo $0 [--boot 1|2] [--display 1|2] [--storage 1|2|3] [--help]"
     exit 1
 fi
 
-clear
+boot_choice=""
+disp_choice=""
+stor_choice=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --boot)
+            boot_choice="$2"
+            shift 2
+            ;;
+        --display)
+            disp_choice="$2"
+            shift 2
+            ;;
+        --storage)
+            stor_choice="$2"
+            shift 2
+            ;;
+        --help|-h)
+            echo "Usage: sudo $0 [OPTIONS]"
+            echo "Options:"
+            echo "  --boot 1|2       1: Full Ventoy CoW, 2: Direct Rescuezilla ISO"
+            echo "  --display 1|2    1: Native GTK window, 2: TigerVNC Server"
+            echo "  --storage 1|2|3  1: Sandbox, 2: Expose /dev/sda (RO), 3: Expose /dev/sda5 (RO)"
+            exit 0
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+clear 2>/dev/null || true
 echo -e "${CYAN}======================================================================${RESET}"
 echo -e "${BOLD}       🧪 RESCUEZILLA & VENTOY VM TEST HARNESS & EMULATION LAB        ${RESET}"
 echo -e "${CYAN}======================================================================${RESET}"
 
 # 1. Select Boot Mode
-echo -e "\n${BOLD}[1/3] Select Boot Pipeline Mode:${RESET}"
-echo -e "${DIM}  ℹ️  Why choose: Option A tests full Ventoy MBR/GRUB menu handoff safely, while Option B boots the Rescuezilla desktop directly in seconds.${RESET}"
-echo -e "  ${CYAN}[1]${RESET} Option A: Full Ventoy Emulation (Safe CoW Snapshot of /dev/sdb)"
-echo -e "  ${CYAN}[2]${RESET} Option B: Direct Rescuezilla ISO Boot (+ Persistence Overlay)"
+if [ -z "$boot_choice" ]; then
+    echo -e "\n${BOLD}[1/3] Select Boot Pipeline Mode:${RESET}"
+    echo -e "${DIM}  ℹ️  Why choose: Option A tests full Ventoy MBR/GRUB menu handoff safely, while Option B boots the Rescuezilla desktop directly in seconds.${RESET}"
+    echo -e "  ${CYAN}[1]${RESET} Option A: Full Ventoy Emulation (Safe CoW Snapshot of /dev/sdb)"
+    echo -e "  ${CYAN}[2]${RESET} Option B: Direct Rescuezilla ISO Boot (+ Persistence Overlay)"
 
-while true; do
-    echo -en "Select Boot Mode [1-2]: "
-    read -r boot_choice
-    case "$boot_choice" in
-        1|2) break ;;
-        *) echo -e "  ${YELLOW}Please enter 1 or 2.${RESET}" ;;
-    esac
-done
+    while true; do
+        echo -en "Select Boot Mode [1-2]: "
+        read -r boot_choice
+        case "$boot_choice" in
+            1|2) break ;;
+            *) echo -e "  ${YELLOW}Please enter 1 or 2.${RESET}" ;;
+        esac
+    done
+fi
 
 # 2. Select Display Interface
-echo -e "\n${BOLD}[2/3] Select Display Interface:${RESET}"
-echo -e "${DIM}  ℹ️  Why choose: Native GTK opens a regular window on your desktop. TigerVNC runs decoupled on localhost:${VNC_PORT} so you can close and reconnect the viewer without stopping the VM.${RESET}"
-echo -e "  ${CYAN}[1]${RESET} Native Window (Direct GTK X11 window on your desktop)"
-echo -e "  ${CYAN}[2]${RESET} TigerVNC Viewer (Decoupled client connecting to localhost:${VNC_PORT})"
+if [ -z "$disp_choice" ]; then
+    echo -e "\n${BOLD}[2/3] Select Display Interface:${RESET}"
+    echo -e "${DIM}  ℹ️  Why choose: Native GTK opens a regular window on your desktop. TigerVNC runs decoupled on localhost:${VNC_PORT} so you can close and reconnect the viewer without stopping the VM.${RESET}"
+    echo -e "  ${CYAN}[1]${RESET} Native Window (Direct GTK X11 window on your desktop)"
+    echo -e "  ${CYAN}[2]${RESET} TigerVNC Viewer (Decoupled client connecting to localhost:${VNC_PORT})"
 
-while true; do
-    echo -en "Select Display Interface [1-2]: "
-    read -r disp_choice
-    case "$disp_choice" in
-        1|2) break ;;
-        *) echo -e "  ${YELLOW}Please enter 1 or 2.${RESET}" ;;
-    esac
-done
+    while true; do
+        echo -en "Select Display Interface [1-2]: "
+        read -r disp_choice
+        case "$disp_choice" in
+            1|2) break ;;
+            *) echo -e "  ${YELLOW}Please enter 1 or 2.${RESET}" ;;
+        esac
+    done
+fi
 
 # 3. Safe Host Storage Passthrough (Read-Only)
-echo -e "\n${BOLD}[3/3] Expose Host Storage for Real Backup Testing?${RESET}"
-echo -e "${DIM}  ℹ️  Why choose: Exposing host partitions with kernel-enforced readonly=on allows Rescuezilla to create real Partclone backup images streaming over LAN to home40 without any danger of modifying host data.${RESET}"
-echo -e "  ${CYAN}[1]${RESET} No: Isolated virtual sandbox (no host drives exposed)"
-echo -e "  ${CYAN}[2]${RESET} Yes: Expose Internal Disk /dev/sda (Read-Only) for Real Backup Testing"
-echo -e "  ${CYAN}[3]${RESET} Yes: Expose /dev/sda5 Linux Partition Only (Read-Only)"
+if [ -z "$stor_choice" ]; then
+    echo -e "\n${BOLD}[3/3] Expose Host Storage for Real Backup Testing?${RESET}"
+    echo -e "${DIM}  ℹ️  Why choose: Exposing host partitions with kernel-enforced readonly=on allows Rescuezilla to create real Partclone backup images streaming over LAN to home40 without any danger of modifying host data.${RESET}"
+    echo -e "  ${CYAN}[1]${RESET} No: Isolated virtual sandbox (no host drives exposed)"
+    echo -e "  ${CYAN}[2]${RESET} Yes: Expose Internal Disk /dev/sda (Read-Only) for Real Backup Testing"
+    echo -e "  ${CYAN}[3]${RESET} Yes: Expose /dev/sda5 Linux Partition Only (Read-Only)"
 
-while true; do
-    echo -en "Select Storage Passthrough [1-3]: "
-    read -r stor_choice
-    case "$stor_choice" in
-        1|2|3) break ;;
-        *) echo -e "  ${YELLOW}Please enter 1, 2, or 3.${RESET}" ;;
-    esac
-done
+    while true; do
+        echo -en "Select Storage Passthrough [1-3]: "
+        read -r stor_choice
+        case "$stor_choice" in
+            1|2|3) break ;;
+            *) echo -e "  ${YELLOW}Please enter 1, 2, or 3.${RESET}" ;;
+        esac
+    done
+fi
 
 # Telemetry Log Paths
 VM_SERIAL_LOG="/tmp/vm_serial_console.log"
@@ -217,11 +255,21 @@ case "$stor_choice" in
 esac
 
 # Configure Display
+# Auto-detect host display & authority
+HOST_USER="${SUDO_USER:-$USER}"
+HOST_UID=$(id -u "$HOST_USER" 2>/dev/null || echo "1000")
+if [ -z "$DISPLAY" ]; then
+    export DISPLAY=":0"
+fi
+if [ -z "$XAUTHORITY" ]; then
+    AUTH_CAND=$(ls /run/user/"$HOST_UID"/.mutter-Xwaylandauth.* /run/user/"$HOST_UID"/gdm/Xauthority /home/"$HOST_USER"/.Xauthority 2>/dev/null | head -n 1)
+    if [ -n "$AUTH_CAND" ]; then
+        export XAUTHORITY="$AUTH_CAND"
+    fi
+fi
+
 if [ "$disp_choice" = "1" ]; then
     echo -e "\n[+] Launching QEMU with Native GTK Window..."
-    # Ensure X11 display permissions if run under sudo
-    export DISPLAY="${DISPLAY:-:1}"
-    export XAUTHORITY="${XAUTHORITY:-/run/user/1000/gdm/Xauthority}"
     QEMU_ARGS+=(-display gtk)
     
     echo -e "${GREEN}======================================================================${RESET}"
@@ -250,10 +298,11 @@ else
     echo -e "  • QEMU Log:   ${VM_QEMU_LOG}"
     echo -e "${GREEN}======================================================================${RESET}"
     
-    echo -e "[*] Spawning TigerVNC Viewer..."
-    export DISPLAY="${DISPLAY:-:1}"
-    export XAUTHORITY="${XAUTHORITY:-/run/user/1000/gdm/Xauthority}"
-    vncviewer "localhost:${VNC_PORT}" 2>/dev/null || xtigervncviewer "localhost:${VNC_PORT}" 2>/dev/null || true
+    # Try spawning viewer if DISPLAY is accessible
+    if [ -n "$DISPLAY" ]; then
+        echo -e "[*] Spawning TigerVNC Viewer..."
+        vncviewer "localhost:${VNC_PORT}" 2>/dev/null || xtigervncviewer "localhost:${VNC_PORT}" 2>/dev/null || true &
+    fi
     
     wait $VM_PID 2>/dev/null || true
 fi
