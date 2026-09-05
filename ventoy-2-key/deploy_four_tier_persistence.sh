@@ -138,6 +138,17 @@ fi
 
 # 3. Enable and start OpenSSH daemon for automated test harness
 mkdir -p /run/sshd /var/run/sshd
+
+# Ensure sshd privilege separation user exists
+if ! id -u sshd >/dev/null 2>&1; then
+    getent group sshd >/dev/null 2>&1 || groupadd -r sshd 2>/dev/null || true
+    useradd -r -g sshd -c "sshd privsep" -d /run/sshd -s /usr/sbin/nologin sshd 2>/dev/null || true
+fi
+
+# Set password for ubuntu and root to 'live' so SSH password auth succeeds immediately
+echo "ubuntu:live" | chpasswd 2>/dev/null || true
+echo "root:live" | chpasswd 2>/dev/null || true
+
 ssh-keygen -A >/dev/null 2>&1 || true
 
 # Bring up network interface and request DHCP if not already up
@@ -241,12 +252,17 @@ XDG_EOF
         find "$TDIR/home/ubuntu/Desktop" -maxdepth 1 -type f -name "*.desktop" -exec chmod +x {} +
     fi
 
-    # 5. SSH Identity Key
-    mkdir -p "$TDIR/home/ubuntu/.ssh"
+    # 5. SSH Identity Key & Authorized Keys
+    mkdir -p "$TDIR/home/ubuntu/.ssh" "$TDIR/root/.ssh"
     if [ -n "$SSH_KEY" ]; then
         cp "$SSH_KEY" "$TDIR/home/ubuntu/.ssh/id_rsa"
         cp "$SSH_KEY" "$TDIR/scripts/id_rsa"
         chmod 600 "$TDIR/home/ubuntu/.ssh/id_rsa" "$TDIR/scripts/id_rsa"
+        if [ -f "${SSH_KEY}.pub" ]; then
+            cat "${SSH_KEY}.pub" >> "$TDIR/home/ubuntu/.ssh/authorized_keys"
+            cat "${SSH_KEY}.pub" >> "$TDIR/root/.ssh/authorized_keys"
+            chmod 600 "$TDIR/home/ubuntu/.ssh/authorized_keys" "$TDIR/root/.ssh/authorized_keys"
+        fi
     fi
 
     # 6. Install OpenSSH Server Binaries into Persistence
@@ -264,6 +280,18 @@ XDG_EOF
         # Enable root and ubuntu login without password restriction
         sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' "$TDIR/etc/ssh/sshd_config" 2>/dev/null || true
         sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' "$TDIR/etc/ssh/sshd_config" 2>/dev/null || true
+
+        # Ensure sshd group and user are present in container's /etc/group and /etc/passwd
+        if [ -f "$TDIR/etc/passwd" ]; then
+            if ! grep -q "^sshd:" "$TDIR/etc/passwd"; then
+                echo "sshd:x:107:65534:sshd privsep:/run/sshd:/usr/sbin/nologin" >> "$TDIR/etc/passwd"
+            fi
+        fi
+        if [ -f "$TDIR/etc/group" ]; then
+            if ! grep -q "^sshd:" "$TDIR/etc/group"; then
+                echo "sshd:x:114:" >> "$TDIR/etc/group"
+            fi
+        fi
     fi
 
     # Set proper permissions for user ubuntu

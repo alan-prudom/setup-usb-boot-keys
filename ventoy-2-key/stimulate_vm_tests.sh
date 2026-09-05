@@ -28,6 +28,12 @@ if [ -f "$KEY_FILE" ]; then
     SSH_OPTS="-i ${KEY_FILE} ${SSH_OPTS}"
 fi
 
+# Use sshpass fallback with default 'live' password if available
+SSH_CMD="ssh"
+if command -v sshpass >/dev/null 2>&1; then
+    SSH_CMD="sshpass -p live ssh"
+fi
+
 echo -e "${CYAN}======================================================================${RESET}"
 echo -e "${BOLD}       🤖 RESCUEZILLA VM AUTOMATED SSH TEST HARNESS                   ${RESET}"
 echo -e "${CYAN}======================================================================${RESET}"
@@ -38,7 +44,7 @@ ATTEMPT=1
 CONNECTED=0
 
 while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-    if ssh ${SSH_OPTS} "${SSH_USER}@${SSH_HOST}" "uptime" >/dev/null 2>&1; then
+    if ${SSH_CMD} ${SSH_OPTS} "${SSH_USER}@${SSH_HOST}" "uptime" >/dev/null 2>&1; then
         CONNECTED=1
         echo -e "${GREEN}✓ Connected to Rescuezilla VM via SSH!${RESET}"
         break
@@ -55,16 +61,16 @@ if [ "$CONNECTED" -ne 1 ]; then
 fi
 
 echo -e "\n${BOLD}[Test 1/4] Inspecting Guest System & Block Devices...${RESET}"
-ssh ${SSH_OPTS} "${SSH_USER}@${SSH_HOST}" "uname -a; echo '--- BLOCK DEVICES ---'; lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT"
+${SSH_CMD} ${SSH_OPTS} "${SSH_USER}@${SSH_HOST}" "uname -a; echo '--- BLOCK DEVICES ---'; lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT"
 
 echo -e "\n${BOLD}[Test 2/4] Verifying OverlayFS Persistence Mounts...${RESET}"
-ssh ${SSH_OPTS} "${SSH_USER}@${SSH_HOST}" "df -hT / /cow 2>/dev/null || true; echo '--- MOUNTS ---'; grep -iE 'overlay|cow|partimag' /proc/mounts || true"
+${SSH_CMD} ${SSH_OPTS} "${SSH_USER}@${SSH_HOST}" "df -hT / /cow 2>/dev/null || true; echo '--- MOUNTS ---'; grep -iE 'overlay|cow|partimag' /proc/mounts || true"
 
 echo -e "\n${BOLD}[Test 3/4] Checking Desktop Launchers & Exec Validity...${RESET}"
-ssh ${SSH_OPTS} "${SSH_USER}@${SSH_HOST}" "ls -la /home/ubuntu/Desktop/; echo '--- DESKTOP FILE VALIDATION ---'; for f in /home/ubuntu/Desktop/*.desktop; do if command -v desktop-file-validate >/dev/null 2>&1; then desktop-file-validate \"\$f\" 2>&1 || echo \"FAILED: \$f\"; else echo \"OK: \$f\"; fi; done"
+${SSH_CMD} ${SSH_OPTS} "${SSH_USER}@${SSH_HOST}" "ls -la /home/ubuntu/Desktop/; echo '--- DESKTOP FILE VALIDATION ---'; for f in /home/ubuntu/Desktop/*.desktop; do if command -v desktop-file-validate >/dev/null 2>&1; then desktop-file-validate \"\$f\" 2>&1 || echo \"FAILED: \$f\"; else echo \"OK: \$f\"; fi; done"
 
 echo -e "\n${BOLD}[Test 4/4] Checking Storage Auto-Mount Logs...${RESET}"
-ssh ${SSH_OPTS} "${SSH_USER}@${SSH_HOST}" "tail -n 20 /var/log/startup_storage.log 2>/dev/null || tail -n 20 ~/startup_storage.log 2>/dev/null || echo 'No startup storage log yet.'"
+${SSH_CMD} ${SSH_OPTS} "${SSH_USER}@${SSH_HOST}" "tail -n 20 /var/log/startup_storage.log 2>/dev/null || tail -n 20 ~/startup_storage.log 2>/dev/null || echo 'No startup storage log yet.'"
 
 echo -e "\n${GREEN}======================================================================${RESET}"
 echo -e "${GREEN}✓ Automated VM Diagnostic Run Completed!${RESET}"
