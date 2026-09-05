@@ -147,7 +147,41 @@ If using the graphical Rescuezilla application:
 
 ## 4. Error Investigation & Diagnostic Toolkit
 
-### Post-Backup Diagnostic Wizard (`post-backup-wizard.sh`)
+### A. Unified Rescue Suite Launcher (`rescue_suite_launcher.sh`)
+When booted into Rescuezilla Live (or directly from Ubuntu), launch the unified 5-function suite:
+
+```bash
+sudo /scripts/rescue_suite_launcher.sh
+# Or when on host Ubuntu:
+sudo ./rescue_suite_launcher.sh
+```
+
+#### Suite Capabilities:
+* **`[1]` Backup Image:** Interactive Clonezilla `ocs-sr` native CLI backup with automated network mount and error trapping.
+* **`[2]` Restore Image:** Select and restore remote disk/partition images safely with confirmation prompts.
+* **`[3]` Disk-to-Disk Clone:** Direct clone between physical disks using `ocs-onthefly`.
+* **`[4]` Verify Image Integrity:** Runs non-destructive Partclone extraction test to verify remote image readability.
+* **`[5]` Image Explorer:** Loopback mounts Partclone gzip images directly to browse and extract individual files.
+* **`[6]` Mount Network Storage:** Establishes headless SSHFS mount to `192.168.1.34:/media/alan/home40/Clonezilla`.
+* **`[7]` Post-Backup Diagnostic Wizard:** Direct launch of telemetry and error triage wizard.
+
+---
+
+### B. QEMU Virtual Machine Test Harness (`run_test_vm.sh`)
+Test the entire Ventoy bootloader, GRUB menu, and Rescuezilla persistence directly from Ubuntu without rebooting:
+
+```bash
+sudo ./run_test_vm.sh [OPTIONS]
+```
+
+#### CLI Options:
+* `--boot 1|2`: `1` for safe copy-on-write (CoW) snapshot of `/dev/sdb`; `2` for direct Rescuezilla ISO boot with persistence.
+* `--display 1|2`: `1` for native GTK window; `2` for TigerVNC server on `localhost:5901`.
+* `--storage 1|2|3`: `1` for isolated sandbox (recommended); `2` for read-only `/dev/sda`; `3` for read-only `/dev/sda5`.
+
+---
+
+### C. Post-Backup Diagnostic Wizard (`post-backup-wizard.sh`)
 Run this tool immediately after any backup or whenever a process reports an error:
 
 ```bash
@@ -189,10 +223,16 @@ sudo mount -t ntfs-3g -o rw /dev/sdb4 /mnt/ntfs_data # Mount Read-Write
 # --- 3. RUN BACKUP CLI ---
 sudo bash run_rescuezilla_backup_cli.sh          # Full automated backup runner
 
-# --- 4. RUN DIAGNOSTIC WIZARD ---
+# --- 4. RUN UNIFIED RESCUE SUITE ---
+sudo bash rescue_suite_launcher.sh              # 5-function Backup, Restore, Clone, Verify, Explore
+
+# --- 5. RUN QEMU TEST HARNESS ---
+sudo bash run_test_vm.sh --boot 1 --display 2 --storage 1 # Safe CoW VM test with VNC
+
+# --- 6. RUN DIAGNOSTIC WIZARD ---
 sudo bash post-backup-wizard.sh                 # Inspect logs and export diagnostic bundle
 
-# --- 5. DRIVE HEALTH CHECK ---
+# --- 7. DRIVE HEALTH CHECK ---
 sudo smartctl -H /dev/sda                       # Check health status of internal drive
 sudo smartctl -H /dev/sdb                       # Check health status of USB drive
 ```
