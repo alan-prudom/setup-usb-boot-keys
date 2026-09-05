@@ -79,23 +79,43 @@ for df in "${SCRIPT_DIR}/persistence_startup/"*.desktop; do
 done
 echo -e "  • Audited Desktop Files ($(wc -l < "${DEST_DIR}/desktop_file_validation.log") lines)"
 
-# 5. Collect Persistence Storage Logs if persistence image is readable
+# 5. Collect System & Backup Operation Logs
+echo -e "  • Harvesting System & Backup Operation Logs..."
+# Check if running inside live Rescuezilla system directly
+if [ -d "/var/log" ] && [ -f "/var/log/clonezilla.log" -o -f "/var/log/startup_storage.log" ]; then
+    cp -a /var/log/clonezilla*.log "${DEST_DIR}/" 2>/dev/null || true
+    cp -a /var/log/partclone*.log "${DEST_DIR}/" 2>/dev/null || true
+    cp -a /var/log/startup_storage.log "${DEST_DIR}/guest_startup_storage.log" 2>/dev/null || true
+    tail -n 500 /var/log/syslog > "${DEST_DIR}/guest_syslog_tail.log" 2>/dev/null || true
+    dmesg -T > "${DEST_DIR}/guest_dmesg_full.log" 2>/dev/null || true
+    if [ -d "/home/ubuntu/Desktop" ]; then
+        ls -la /home/ubuntu/Desktop/ > "${DEST_DIR}/guest_desktop_ls.txt" 2>/dev/null || true
+    fi
+    echo -e "  • Harvested Live Rescuezilla & Clonezilla Logs from /var/log/"
+fi
+
+# Also check loop-mounted persistence container if running on host
 PERSIST_IMG="/media/alan/Ventoy1/rescuezilla-persistence.dat"
 if [ -f "$PERSIST_IMG" ] && [ "$EUID" -eq 0 ]; then
     tmp_m="/mnt/persist_log_harvest_$$"
     mkdir -p "$tmp_m"
     if mount -o loop,ro "$PERSIST_IMG" "$tmp_m" 2>/dev/null; then
+        cp -a "$tmp_m/upper/var/log/clonezilla"* "${DEST_DIR}/" 2>/dev/null || true
+        cp -a "$tmp_m/upper/var/log/partclone"* "${DEST_DIR}/" 2>/dev/null || true
         if [ -f "$tmp_m/upper/var/log/startup_storage.log" ]; then
             cp "$tmp_m/upper/var/log/startup_storage.log" "${DEST_DIR}/guest_startup_storage.log" 2>/dev/null || true
         fi
         if [ -f "$tmp_m/upper/var/log/syslog" ]; then
-            tail -n 300 "$tmp_m/upper/var/log/syslog" > "${DEST_DIR}/guest_syslog_tail.log" 2>/dev/null || true
+            tail -n 500 "$tmp_m/upper/var/log/syslog" > "${DEST_DIR}/guest_syslog_tail.log" 2>/dev/null || true
+        fi
+        if [ -f "$tmp_m/upper/var/log/dmesg" ]; then
+            cp "$tmp_m/upper/var/log/dmesg" "${DEST_DIR}/guest_dmesg.log" 2>/dev/null || true
         fi
         ls -la "$tmp_m/upper/home/ubuntu/Desktop/" > "${DEST_DIR}/guest_desktop_ls.txt" 2>/dev/null || true
         umount "$tmp_m" 2>/dev/null || true
     fi
     rmdir "$tmp_m" 2>/dev/null || true
-    echo -e "  • Harvested Guest Persistence Storage Logs"
+    echo -e "  • Harvested Guest Persistence Storage & Clonezilla Logs"
 fi
 
 # 6. Run verify_ventoy2.sh output
