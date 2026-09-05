@@ -1,73 +1,61 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Rescuezilla Live Persistence Startup Task
-# Mounts USB NTFS partition at /media/ubuntu/ with full user permissions
+# Mounts SHARED FAT partition (C9D1-3C83) and Internal HDD (sda5, ro)
 # ==============================================================================
 
-LOG_FILE="/var/log/startup_ntfs.log"
-USER_LOG="/home/ubuntu/startup_ntfs.log"
+LOG_FILE="/var/log/startup_storage.log"
+USER_LOG="/home/ubuntu/startup_storage.log"
 
 exec > >(tee -a "$LOG_FILE" "$USER_LOG") 2>&1
 
 echo "======================================================================"
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Rescuezilla NTFS Mount Task"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Rescuezilla Storage Mount Task"
 echo "Running as: $(whoami) (UID: $(id -u))"
 echo "======================================================================"
 
 sleep 1
 
-NTFS_UUID="2C95D29B2DF0500E"
-NTFS_DEV=""
+# 1. Mount SHARED FAT (82GB FAT32 partition C9D1-3C83)
+FAT_DEV=$(blkid -U "C9D1-3C83" 2>/dev/null || blkid -L "SHARED FAT" 2>/dev/null || lsblk -rno PATH,LABEL | grep -i "SHARED FAT" | awk '{print $1}' || echo "/dev/sdb4")
+TARGET_MOUNT="/media/ubuntu/SHARED_FAT"
 
-# 1. Locate device
-if command -v blkid >/dev/null 2>&1; then
-    NTFS_DEV=$(sudo blkid -U "$NTFS_UUID" 2>/dev/null || blkid -U "$NTFS_UUID" 2>/dev/null || echo "")
-fi
-
-if [ -z "$NTFS_DEV" ]; then
-    NTFS_DEV=$(lsblk -rno PATH,UUID | grep -i "$NTFS_UUID" | awk '{print $1}' || echo "")
-fi
-
-if [ -z "$NTFS_DEV" ]; then
-    for dev in /dev/sdb4 /dev/sda4 /dev/sdb3; do
-        if [ -b "$dev" ]; then
-            fstype=$(lsblk -no FSTYPE "$dev" 2>/dev/null || echo "")
-            if echo "$fstype" | grep -iE "ntfs|fuseblk" >/dev/null 2>&1; then
-                NTFS_DEV="$dev"
-                break
-            fi
-        fi
-    done
-fi
-
-echo "Detected NTFS Block Device: '${NTFS_DEV:-NOT_FOUND}'"
-
-if [ -n "$NTFS_DEV" ] && [ -b "$NTFS_DEV" ]; then
-    TARGET_MOUNT="/media/ubuntu/${NTFS_UUID}"
-    mkdir -p "$TARGET_MOUNT"
-    chmod 777 /media/ubuntu 2>/dev/null || true
-    
-    if ! mountpoint -q "$TARGET_MOUNT"; then
-        echo "Mounting $NTFS_DEV at $TARGET_MOUNT (read-write, user-accessible)..."
-        mount -t ntfs-3g -o rw,umask=000,uid=1000,gid=1000,force "$NTFS_DEV" "$TARGET_MOUNT" 2>&1 || \
-        mount -o rw,umask=000 "$NTFS_DEV" "$TARGET_MOUNT" 2>&1 || true
+if [ -b "$FAT_DEV" ]; then
+    CURRENT_MOUNT=$(lsblk -no MOUNTPOINT "$FAT_DEV" 2>/dev/null | head -n1)
+    if [ -z "$CURRENT_MOUNT" ]; then
+        mkdir -p "$TARGET_MOUNT"
+        mount -o rw,umask=000,uid=1000,gid=1000 "$FAT_DEV" "$TARGET_MOUNT" 2>/dev/null || mount "$FAT_DEV" "$TARGET_MOUNT" 2>/dev/null || true
+        ACTUAL_MOUNT="$TARGET_MOUNT"
+        echo "Mounted $FAT_DEV at $TARGET_MOUNT"
     else
-        echo "Device is already mounted at $TARGET_MOUNT."
+        ACTUAL_MOUNT="$CURRENT_MOUNT"
+        echo "$FAT_DEV is already mounted at $ACTUAL_MOUNT"
     fi
-
-    # Create symlinks in user profile
     mkdir -p /home/ubuntu/Desktop
-    ln -sfn "$TARGET_MOUNT" /home/ubuntu/ntfs_usb
-    ln -sfn "$TARGET_MOUNT" /home/ubuntu/Desktop/NTFS_Storage
-    chown -h 999:999 /home/ubuntu/ntfs_usb /home/ubuntu/Desktop/NTFS_Storage 2>/dev/null || \
-    chown -h 1000:1000 /home/ubuntu/ntfs_usb /home/ubuntu/Desktop/NTFS_Storage 2>/dev/null || true
-    
-    echo "Created user symlink: ~/ntfs_usb -> $TARGET_MOUNT"
-    
-    if [ -f "${TARGET_MOUNT}/id_rsa" ]; then
-        chmod 600 "${TARGET_MOUNT}/id_rsa" 2>/dev/null || true
-    fi
-    
-    echo "SUCCESS: NTFS partition mounted and symlinked."
+    ln -sfn "$ACTUAL_MOUNT" /home/ubuntu/shared_fat
+    ln -sfn "$ACTUAL_MOUNT" /home/ubuntu/ntfs_usb
+    ln -sfn "$ACTUAL_MOUNT" /home/ubuntu/Desktop/SHARED_FAT_Storage
+    ln -sfn "$ACTUAL_MOUNT" /home/ubuntu/Desktop/NTFS_Storage
 fi
+
+# 2. Mount Internal HDD Linux partition (/dev/sda5, read-only for safe imaging)
+if [ -b /dev/sda5 ]; then
+    CURRENT_SDA5=$(lsblk -no MOUNTPOINT /dev/sda5 2>/dev/null | head -n1)
+    if [ -z "$CURRENT_SDA5" ]; then
+        mkdir -p /media/ubuntu/Internal_HDD
+        mount -o ro /dev/sda5 /media/ubuntu/Internal_HDD 2>/dev/null || mount /dev/sda5 /media/ubuntu/Internal_HDD 2>/dev/null || true
+        ACTUAL_SDA5="/media/ubuntu/Internal_HDD"
+        echo "Mounted /dev/sda5 at $ACTUAL_SDA5 (ro)"
+    else
+        ACTUAL_SDA5="$CURRENT_SDA5"
+        echo "/dev/sda5 is already mounted at $ACTUAL_SDA5"
+    fi
+    ln -sfn "$ACTUAL_SDA5" /home/ubuntu/internal_hdd
+    ln -sfn "$ACTUAL_SDA5" /home/ubuntu/Desktop/Internal_HDD
+fi
+
+# Ensure user permissions
+chown -h 1000:1000 /home/ubuntu/Desktop/* 2>/dev/null || true
+chown 1000:1000 /home/ubuntu/shared_fat /home/ubuntu/ntfs_usb /home/ubuntu/internal_hdd 2>/dev/null || true
+echo "SUCCESS: Storage partitions mounted and symlinked."
 echo "======================================================================"

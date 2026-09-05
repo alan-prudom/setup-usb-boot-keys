@@ -128,18 +128,25 @@ All scripts and configuration templates are tracked in git under `devices/setup-
 4. **Tier 4: Desktop Launchers with Window Retention (`--hold`)**
    - Launchers on `/home/ubuntu/Desktop/` maintain terminal logs open on exit.
 
-### 6.2 Automatic Network Storage (`home40`)
-- Systemd user service `mount-home40.service` auto-mounts `192.168.1.34:/media/alan/home40` via SSHFS on boot, restoring access to linked Git workspaces.
+### 6.2 Automatic Network Storage & Unified Rescue Suite
+- **SSHFS Network Storage (`home40`):** Systemd user service `mount-home40.service` and helper `/usr/local/bin/mount_home40_backup.sh` auto-mount remote storage at `192.168.1.34:/media/alan/home40/Clonezilla` to `/mnt/home40_clonezilla` and bind-mount to `/home/partimag`.
+- **Unified 5-Function Rescue Suite (`rescue_suite_launcher.sh`):** Interactive menu covering the 5 core Rescuezilla operations (Backup, Restore, Clone, Verify, Image Explorer), network connection, local storage mounting, post-backup wizard, and native GUI launch.
+- **Desktop Launchers:** Deployed to `/home/ubuntu/Desktop/` with `--hold` retention:
+  * `Rescue_Suite.desktop` (Unified Rescue & Backup Suite)
+  * `Mount_Network_home40.desktop` (Connect Network Storage)
+  * `Run_Backup_CLI.desktop` (Direct CLI Backup Assistant)
+  * `Post_Backup_Wizard.desktop` (Post-backup verification & SMART logs)
 
 ### 6.3 Casper OverlayFS Architecture & `/upper` Dual-Target Deployment
 - **Technical Insight:** Modern Ubuntu Casper (Ubuntu 24.10 / Rescuezilla 2.6.1) constructs rootfs using OverlayFS with `upperdir=/cow/upper` and `workdir=/cow/work`.
 - **Resolution:** `deploy_four_tier_persistence.sh` deploys binaries, autostart configurations, systemd services, and desktop launchers into both `$MNT/upper/` (live overlay layer) and `$MNT/` (raw container fallback).
 
 ### 6.4 Tri-Tier Operational Script Distribution
-All Clonezilla imaging and post-mortem diagnostic tools are mirrored across three access points:
-1. **Live System Overlay:** `/scripts/` & `/usr/local/bin/` (and Desktop icons `Run_Backup_CLI.desktop`, `Post_Backup_Wizard.desktop`).
+All Clonezilla imaging, Rescue Suite, and post-mortem diagnostic tools are mirrored across three access points:
+1. **Live System Overlay:** `/scripts/` & `/usr/local/bin/` (and Desktop icons `Rescue_Suite.desktop`, `Mount_Network_home40.desktop`, `Run_Backup_CLI.desktop`, `Post_Backup_Wizard.desktop`).
 2. **Shared FAT32 Partition:** `/ntfs/scripts/` (accessible under Rescuezilla at `/media/ubuntu/SHARED_FAT/scripts/`).
 3. **Ventoy Partition 1:** `/media/alan/Ventoy1/scripts/`.
 
 *(Note: Peripheral administrative tools `run_mosh` and `tailscale_setup.sh` are isolated into `network_and_remote_tools/` to eliminate clutter).*
+
 

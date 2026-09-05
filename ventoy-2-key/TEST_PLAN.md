@@ -78,8 +78,11 @@ graph TD
 | **TC-07** | Persistence Container | `rescuezilla-persistence.dat` | Verify ext4 filesystem type and volume label `writable` (updated from `casper-rw`). | Formatted ext4 filesystem with label `writable`. | **PASS** (`blkid` confirms ext4, label `writable`) |
 | **TC-08** | F6 Recovery Stanzas | `ventoy_grub.cfg` | Verify presence and syntax of Safe Graphics and Text Console fallback entries. | Clean parsing with `grub-script-check`. | **PASS** (Both fallback entries valid) |
 | **TC-09** | Physical Boot Test | Hardware Startup (HP) | Boot PC from USB key (`F9` boot menu):<br>1. Ventoy 1.0.99 menu displays.<br>2. Test Rescuezilla with persistence.<br>3. Press `F6` → test direct Ubuntu chainload or safe graphics fallback. | Clean boot without hangs. | **PASS** (F6 recovery and live boot operational) |
-| **TC-10** | FAT Backup Scripts | `/ntfs/scripts` | Verify presence of `run_rescuezilla_backup_cli.sh` and `post-backup-wizard.sh`. | Scripts executable on FAT partition. | **PASS** (Verified present and executable) |
+| **TC-10** | FAT Backup Scripts | `/ntfs/scripts` | Verify presence of `run_rescuezilla_backup_cli.sh`, `post-backup-wizard.sh`, and `rescue_suite_launcher.sh`. | Scripts executable on FAT partition. | **PASS** (Verified present and executable) |
 | **TC-11** | OverlayFS `/upper` Layer | `rescuezilla-persistence.dat` | Loop-mount container and verify deployed binaries, autostart systemd unit, and desktop launchers in `/upper/`. | Full Four-Tier structure present in `/upper/`. | **PASS** (All binaries and launchers verified in `/upper/`) |
+| **TC-12** | Unified Rescue Suite | `rescue_suite_launcher.sh` | Validate 5 core functions (Backup, Restore, Clone, Verify, Image Explorer) and automated SSHFS network mounting. | Launcher handles network auto-mount, bind-mount to `/home/partimag`, and sub-tools. | **PASS** (Syntax validated, network and menu tested) |
+| **TC-13** | POSIX Shell Portability | Shell backup scripts | Validate execution of backup runners under Dash (`/bin/sh`) without syntax errors (`[[: not found`). | Strict POSIX syntax (`case` blocks) executes cleanly under Dash. | **PASS** (All runners verified with Dash) |
+
 
 ---
 

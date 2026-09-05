@@ -5,16 +5,21 @@ These files and configurations are pre-loaded inside `rescuezilla-persistence.da
 ### 1. Embedded Top-Level Scripts (`/scripts/` & `~/scripts/`)
 * **Role:** Completely decouples script execution from external partition mounting.
 * **Included Components:**
+  * `/scripts/rescue_suite_launcher.sh` (Unified 5-function Rescue Suite runner)
   * `/scripts/run_rescuezilla_backup_cli.sh` (Backup Assistant runner)
   * `/scripts/post-backup-wizard.sh` (Post-backup diagnostic wizard)
+  * `/scripts/mount_home40_backup.sh` (SSHFS network mount helper)
   * `/scripts/id_rsa` & `~/.ssh/id_rsa` (Pre-installed SSH credentials, `chmod 600`)
   * `/scripts/ventoy_boot_repair_guide.md` (Offline reference manual)
 * **Desktop Folder:** Accessible via the `~/Desktop/Scripts_Folder` symlink.
 
 ### 2. Desktop Launchers (`/home/ubuntu/Desktop/`)
+* **`Rescue_Suite.desktop`:** Launches `sudo bash /usr/local/bin/rescue_suite_launcher.sh` (5 core functions + network setup).
+* **`Mount_Network_home40.desktop`:** Launches `sudo bash /usr/local/bin/mount_home40_backup.sh`.
 * **`Run_Backup_CLI.desktop`:** Launches `sudo bash /scripts/run_rescuezilla_backup_cli.sh`.
 * **`Post_Backup_Wizard.desktop`:** Launches `sudo bash /scripts/post-backup-wizard.sh`.
-* **Window Persistence:** Configured with `xfce4-terminal --hold --geometry=105x32` so terminal windows remain open upon completion or error.
+* **Window Persistence:** Configured with `xfce4-terminal --hold` so terminal windows remain open upon completion or error.
+
 
 ### 3. Startup Mount Automation (`mount_storage_startup.sh`)
 * **Deployed to:** `/upper/usr/local/bin/mount_storage_startup.sh` (with symlink `/usr/local/bin/mount_ntfs_startup.sh` for backward compatibility).
