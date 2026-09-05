@@ -94,8 +94,8 @@ fat_scripts_dir="/ntfs/scripts"
 [ ! -d "$fat_scripts_dir" ] && fat_scripts_dir="/media/ubuntu/SHARED_FAT/scripts"
 [ ! -d "$fat_scripts_dir" ] && fat_scripts_dir="/media/ubuntu/SHARED FAT/scripts"
 if [ -d "$fat_scripts_dir" ]; then
-    if [ -f "$fat_scripts_dir/run_rescuezilla_backup_cli.sh" ] && [ -f "$fat_scripts_dir/post-backup-wizard.sh" ]; then
-        echo "PASS (run_rescuezilla_backup_cli.sh & post-backup-wizard.sh present)"
+    if [ -f "$fat_scripts_dir/run_rescuezilla_backup_cli.sh" ] && [ -f "$fat_scripts_dir/post-backup-wizard.sh" ] && [ -f "$fat_scripts_dir/rescue_suite_launcher.sh" ]; then
+        echo "PASS (run_rescuezilla_backup_cli.sh, post-backup-wizard.sh & rescue_suite_launcher.sh present)"
     else
         echo "FAIL: Expected scripts missing from $fat_scripts_dir"
         exit 1
@@ -110,8 +110,8 @@ if [ -f "$persist_file" ]; then
     check_mnt="/mnt/verify_persist_$$"
     mkdir -p "$check_mnt"
     mount -o loop,ro "$persist_file" "$check_mnt" 2>/dev/null || true
-    if [ -f "$check_mnt/upper/scripts/run_rescuezilla_backup_cli.sh" ] && [ -f "$check_mnt/upper/home/ubuntu/Desktop/Run_Backup_CLI.desktop" ]; then
-        echo "PASS (OverlayFS /upper binaries and desktop shortcuts verified)"
+    if [ -f "$check_mnt/upper/scripts/rescue_suite_launcher.sh" ] && [ -f "$check_mnt/upper/home/ubuntu/Desktop/Rescue_Suite.desktop" ]; then
+        echo "PASS (OverlayFS /upper Rescue Suite binaries and desktop shortcuts verified)"
         umount "$check_mnt" 2>/dev/null || true
         rmdir "$check_mnt" 2>/dev/null || true
     else

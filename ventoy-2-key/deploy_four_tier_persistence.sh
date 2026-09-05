@@ -80,7 +80,8 @@ for TDIR in "${TARGET_DIRS[@]}"; do
         "sda_rescue_backup.sh" \
         "sda5_rescue_backup.sh" \
         "mount_home40_backup.sh" \
-        "mount_fat_and_hdd.sh"; do
+        "mount_fat_and_hdd.sh" \
+        "rescue_suite_launcher.sh"; do
         if [ -f "${SCRIPT_DIR}/${script_file}" ]; then
             cp "${SCRIPT_DIR}/${script_file}" "$TDIR/scripts/"
             chmod +x "$TDIR/scripts/${script_file}"

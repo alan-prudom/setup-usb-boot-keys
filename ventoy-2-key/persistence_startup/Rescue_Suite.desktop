@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=🛡️ Unified Rescue & Backup Suite
+Comment=Network Storage Setup + Backup, Restore, Clone, Verify, Image Explorer
+Exec=xfce4-terminal --title="🛡️ Rescue & Backup Suite" --hold --geometry=110x35 -e "bash -c 'if [ -f /scripts/rescue_suite_launcher.sh ]; then sudo bash /scripts/rescue_suite_launcher.sh; elif [ -f /usr/local/bin/rescue_suite_launcher.sh ]; then sudo bash /usr/local/bin/rescue_suite_launcher.sh; else candidate=\$(find /media /mnt /home -name rescue_suite_launcher.sh 2>/dev/null | head -n 1); if [ -n \"\$candidate\" ]; then sudo bash \"\$candidate\"; else echo \"Error: rescue_suite_launcher.sh not found.\"; fi; fi'"
+Icon=system-run
+Terminal=false
+StartupNotify=true
