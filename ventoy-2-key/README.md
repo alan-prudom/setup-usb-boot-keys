@@ -149,4 +149,29 @@ All Clonezilla imaging, Rescue Suite, and post-mortem diagnostic tools are mirro
 
 *(Note: Peripheral administrative tools `run_mosh` and `tailscale_setup.sh` are isolated into `network_and_remote_tools/` to eliminate clutter).*
 
+---
+
+## 7. Virtual Machine Test Harness & Emulation Lab
+
+For rapid regression testing and script verification without bare-metal reboots:
+
+* **Interactive VM Launcher (`run_test_vm.sh`):**
+  ```bash
+  sudo ./devices/setup-usb-boot-keys/ventoy-2-key/run_test_vm.sh
+  ```
+  - **Boot Pipeline:**
+    * **Option A:** Full Ventoy MBR/EFI emulation via temporary copy-on-write overlay (`qcow2`) backing `/dev/sdb`.
+    * **Option B:** Direct `rescuezilla-2.6.1-64bit.oracular.iso` boot with attached `rescuezilla-persistence.dat`.
+  - **Display Modes:**
+    * **Native Window:** Direct X11 GTK desktop window.
+    * **TigerVNC Viewer:** Decoupled RFB client on `localhost:5901`.
+  - **Safe Storage Passthrough:** Expose `/dev/sda` or `/dev/sda5` with kernel-enforced `readonly=on` for authentic Partclone backup testing streaming to network storage (`home40`).
+
+* **Automated SSH Test Harness (`stimulate_vm_tests.sh`):**
+  ```bash
+  ./devices/setup-usb-boot-keys/ventoy-2-key/stimulate_vm_tests.sh
+  ```
+  Connects to guest on `localhost:2222`, validates block devices, verifies persistence OverlayFS mounts, and inspects desktop entry validity non-interactively.
+
+
 
