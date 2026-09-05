@@ -183,4 +183,5 @@ For rapid regression testing and script verification without bare-metal reboots:
   ```bash
   sudo ./devices/setup-usb-boot-keys/ventoy-2-key/export_vm_and_system_logs_to_fat.sh
   ```
-  Harvests VM serial telemetry, QEMU runtime logs, host kernel dmesg, and guest persistence storage logs into a timestamped bundle on `/ntfs/` (Partition 4 `SHARED FAT`).
+  Harvests VM serial telemetry, QEMU runtime logs, live and persistent Clonezilla/Partclone operational logs, host kernel dmesg, and guest persistence storage logs into a timestamped bundle on `/ntfs/` (Partition 4 `SHARED FAT`).
+

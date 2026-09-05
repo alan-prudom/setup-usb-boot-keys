@@ -87,8 +87,8 @@ graph TD
 | **TC-16** | OpenSSH Server Packaging | `deploy_four_tier_persistence.sh` | Verify extraction of Oracular `openssh-server 9.7p1` into persistence, creation of `sshd` privsep user, and autonomous authentication (`ubuntu:live`). | Guest VM accepts SSH connections on port 2222 and executes commands. | **PASS** (Remote command execution verified via `stimulate_vm_tests.sh`) |
 | **TC-17** | QEMU Clean Shutdown (`noprompt`) | `run_test_vm.sh` | Verify VM powers off cleanly upon guest `poweroff` without blocking on Casper's media eject prompt. | QEMU exits with status 0 in under 3 seconds without process hang. | **PASS** (Clean ACPI poweroff verified) |
 | **TC-18** | Self-Healing Storage Remount | `rescue_suite_launcher.sh` | Verify `remount_local_storage` signal trap restores `/media/ubuntu/SHARED_FAT` and desktop symlinks if Clonezilla unmounts source partitions. | Partition remounts automatically after operation aborts or finishes. | **PASS** (Trap and remount logic verified) |
-
-
+| **TC-19** | Bare-Metal Disk Backup | Physical Boot on HP EliteBook | Execute full-disk backup of internal SSD (`/dev/sda`) to remote SSHFS repository (`home40`). | Partitions `sda1` and `sda3` imaged cleanly (~65 GB). Pre-flight detection aborts on bad sectors on `sda2` safely without data corruption. | **PASS** (Forensically documented in `comprehensive_physical_backup_and_bad_sector_forensics_2026-09-05.md`) |
+| **TC-20** | Diagnostic Bundle Harvesting | `export_vm_and_system_logs_to_fat.sh` | Run diagnostic log export on live bare-metal host after Clonezilla backup. | Automatically gathers `clonezilla.log`, `partclone.log`, `startup_storage.log`, guest dmesg, and desktop manifests into `/ntfs/`. | **PASS** (Bundle verified at `/ntfs/vm_diagnostic_bundle_20260905_174707/`) |
 
 ---
 
