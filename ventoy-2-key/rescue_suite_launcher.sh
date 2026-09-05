@@ -235,13 +235,40 @@ while true; do
             fi
             ;;
         5)
-            # Image Explorer (beta)
+            # Image Explorer (Mount & Browse Files Inside Image)
             echo -e "\n${BOLD}>>> Image Explorer (Mount & Browse Files Inside Image)...${RESET}"
             ensure_network_mount || true
             echo -e "${DIM}  ℹ️  Why this is useful: Mounts partclone/fsarchiver images via qemu-nbd so you can copy specific files without restoring the whole disk.${RESET}"
-            if command -v rescuezillapy >/dev/null 2>&1; then
-                echo -e "  Launching Rescuezilla Image Explorer..."
-                sudo /usr/sbin/rescuezillapy mount &
+
+            echo -e "\n  ${CYAN}[1]${RESET} Select and Mount Specific Image (CLI + File Browser)"
+            echo -e "  ${CYAN}[2]${RESET} Open Native Rescuezilla GUI Wizard"
+            exp_choice=$(prompt_choice "  Select mode [1-2]: " 1 2)
+
+            if [ "$exp_choice" = "1" ] && command -v rescuezillapy >/dev/null 2>&1; then
+                mapfile -t img_list < <(find /home/partimag -maxdepth 1 -mindepth 1 -type d -exec basename {} \; 2>/dev/null | sort)
+                if [ ${#img_list[@]} -eq 0 ]; then
+                    echo -e "${YELLOW}No backup image directories found in /home/partimag.${RESET}"
+                    echo -e "Launching native Rescuezilla GUI instead..."
+                    sudo rescuezilla &
+                else
+                    echo -e "\n  ${BOLD}Available Backup Images:${RESET}"
+                    idx=1
+                    for img in "${img_list[@]}"; do
+                        echo -e "  ${CYAN}[$idx]${RESET} $img"
+                        idx=$((idx + 1))
+                    done
+                    sel_idx=$(prompt_choice "  Select image to explore [1-${#img_list[@]}]: " 1 "${#img_list[@]}")
+                    selected_img="${img_list[$((sel_idx - 1))]}"
+                    mount_dest="/mnt/image_explorer_${selected_img}"
+                    sudo mkdir -p "$mount_dest"
+                    echo -e "  Mounting image ${BOLD}${selected_img}${RESET} to ${BOLD}${mount_dest}${RESET}..."
+                    sudo /usr/sbin/rescuezillapy mount --source "/home/partimag/${selected_img}" --destination "$mount_dest" &
+                    sleep 2
+                    if command -v pcmanfm >/dev/null 2>&1; then
+                        pcmanfm "$mount_dest" 2>/dev/null &
+                    fi
+                    echo -e "${GREEN}✓ Image Explorer launched. Destination: $mount_dest${RESET}"
+                fi
             else
                 echo -e "  Launching Rescuezilla GUI to open Image Explorer..."
                 sudo rescuezilla &

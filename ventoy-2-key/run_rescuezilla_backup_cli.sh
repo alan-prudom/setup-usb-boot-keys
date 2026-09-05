@@ -131,6 +131,12 @@ fi
 # 3. Select Drive
 echo -e "\n${BOLD}[2/4] Target Drive Selection${RESET}"
 echo -e "${DIM}  ℹ️  Why we ask this: Both the internal system SSD (/dev/sda) and the USB boot drive (/dev/sdb) are present. Selecting the correct drive prevents accidentally reading or cloning the wrong physical disk.${RESET}"
+
+echo -e "\n  ${BOLD}Detected Storage Devices & Partitions Overview:${RESET}"
+echo -e "  --------------------------------------------------------------------------------"
+lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINTS /dev/sda /dev/sdb 2>/dev/null | sed 's/^/  /' || true
+echo -e "  --------------------------------------------------------------------------------"
+
 echo -e "  ${CYAN}[1]${RESET} /dev/sda (Internal 1TB Drive - Windows OS + User Data)"
 echo -e "  ${CYAN}[2]${RESET} /dev/sdb (128GB USB / SD Drive - Ventoy Bootloader & Live OS)"
 drive_choice=$(prompt_choice "Select drive to backup [1-2]: " 1 2)
@@ -145,15 +151,21 @@ fi
 
 # 4. Select Partition Scope
 echo -e "\n${BOLD}[3/4] Partition Backup Scope for ${TARGET_DRIVE}${RESET}"
-echo -e "${DIM}  ℹ️  Why we ask this: Backing up an entire 1TB disk takes much longer and consumes massive network storage, whereas backing up only the OS partitions (sda1+sda2) takes minutes and contains everything required to restore Windows.${RESET}"
+echo -e "${DIM}  ℹ️  Why we ask this: Backing up an entire disk takes much longer and consumes massive network storage, whereas backing up targeted OS partitions takes minutes and contains everything required to restore the OS.${RESET}"
+
+echo -e "\n  ${BOLD}Detailed Partition Layout for ${TARGET_DRIVE}:${RESET}"
+echo -e "  --------------------------------------------------------------------------------"
+lsblk -o NAME,SIZE,TYPE,FSTYPE,LABEL,MOUNTPOINTS "$TARGET_DRIVE" 2>/dev/null | sed 's/^/  /' || true
+echo -e "  --------------------------------------------------------------------------------"
+
 if [ "$TARGET_DRIVE" = "/dev/sda" ]; then
-    echo -e "  ${CYAN}[1]${RESET} Windows 11 Only: sda1 (System Reserved) + sda2 (OS) [Recommended]"
+    echo -e "  ${CYAN}[1]${RESET} Windows 11 Only: sda1 (System Reserved) + sda2 (Windows OS) [Recommended]"
     echo -e "  ${CYAN}[2]${RESET} Entire Internal Disk: all partitions on /dev/sda"
-    echo -e "  ${CYAN}[3]${RESET} Custom selection (specify exact partition list)"
+    echo -e "  ${CYAN}[3]${RESET} Custom selection (specify exact partition list from table above)"
 else
     echo -e "  ${CYAN}[1]${RESET} Ventoy Core Partitions: sdb1 (Ventoy) + sdb2 (EFI) + sdb3 (Linux OS) [Recommended]"
     echo -e "  ${CYAN}[2]${RESET} Entire USB Drive: all partitions on /dev/sdb"
-    echo -e "  ${CYAN}[3]${RESET} Custom selection (specify exact partition list)"
+    echo -e "  ${CYAN}[3]${RESET} Custom selection (specify exact partition list from table above)"
 fi
 
 scope_choice=$(prompt_choice "Select partition scope [1-3]: " 1 3)
@@ -268,7 +280,9 @@ LATEST_PARTITIONS="${PARTITIONS_LIST}"
 LATEST_EXIT_CODE="${BACKUP_EXIT_CODE}"
 LATEST_TIMESTAMP="$(date '+%Y-%m-%d %H:%M:%S')"
 STATE
-ln -sf "$LOG_FILE" "${SCRIPT_DIR}/latest_backup.log"
+if ! ln -sf "$LOG_FILE" "${SCRIPT_DIR}/latest_backup.log" 2>/dev/null; then
+    cp -f "$LOG_FILE" "${SCRIPT_DIR}/latest_backup.log" 2>/dev/null || true
+fi
 
 if [ "$BACKUP_EXIT_CODE" -eq 0 ]; then
     echo -e "\n${GREEN}======================================================================${RESET}"

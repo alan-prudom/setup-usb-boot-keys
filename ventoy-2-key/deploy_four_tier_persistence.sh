@@ -187,6 +187,17 @@ XDG_EOF
     # Remove obsolete desktop entries that produce "no valid Exec line" error
     rm -f "$TDIR/home/ubuntu/Desktop/mount-ntfs.desktop" "$TDIR/etc/xdg/autostart/mount-ntfs.desktop"
 
+    # Fix malformed xfce4-terminal.desktop (missing Exec in [Desktop Action preferences])
+    for term_file in "$TDIR/home/ubuntu/.local/share/applications/xfce4-terminal.desktop" "$TDIR/home/ubuntu/Desktop/xfce4-terminal.desktop"; do
+        if [ -f "$term_file" ] && [ ! -L "$term_file" ]; then
+            if grep -q "\[Desktop Action preferences\]" "$term_file" && ! sed -n '/\[Desktop Action preferences\]/,$p' "$term_file" | grep -q "^Exec="; then
+                echo "Exec=xfce4-terminal --preferences" >> "$term_file"
+            fi
+        fi
+    done
+    # Ensure Desktop symlink points to clean system application
+    ln -sf "/usr/share/applications/xfce4-terminal.desktop" "$TDIR/home/ubuntu/Desktop/xfce4-terminal.desktop"
+
     if [ -d "${SCRIPT_DIR}/persistence_startup" ]; then
         cp "${SCRIPT_DIR}/persistence_startup/"*.desktop "$TDIR/home/ubuntu/Desktop/"
         find "$TDIR/home/ubuntu/Desktop" -maxdepth 1 -type f -name "*.desktop" -exec chmod +x {} +
