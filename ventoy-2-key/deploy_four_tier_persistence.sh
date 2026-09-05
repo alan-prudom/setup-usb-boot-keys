@@ -136,10 +136,32 @@ if [ -b /dev/sda5 ]; then
 fi
 
 # 3. Enable and start OpenSSH daemon for automated test harness
+mkdir -p /run/sshd /var/run/sshd
+ssh-keygen -A >/dev/null 2>&1 || true
+
+# Bring up network interface and request DHCP if not already up
+for iface in eth0 enp0s3 ens3; do
+    if [ -e "/sys/class/net/$iface" ]; then
+        ip link set up dev "$iface" 2>/dev/null || true
+        dhclient -v "$iface" >/dev/null 2>&1 || true
+        break
+    fi
+done
+
 if command -v systemctl >/dev/null 2>&1; then
+    systemctl unmask ssh 2>/dev/null || true
+    systemctl unmask sshd 2>/dev/null || true
     systemctl start ssh 2>/dev/null || systemctl restart ssh 2>/dev/null || true
 fi
 /etc/init.d/ssh start 2>/dev/null || true
+
+# Direct daemon fallback to guarantee port 22 is listening
+if ! pgrep -x sshd >/dev/null 2>&1; then
+    if [ -x /usr/sbin/sshd ]; then
+        /usr/sbin/sshd -D &
+        echo "Spawned /usr/sbin/sshd directly in background."
+    fi
+fi
 
 # Ensure user permissions
 chown -h 1000:1000 /home/ubuntu/Desktop/* 2>/dev/null || true

@@ -14,6 +14,17 @@
 
 set -e
 
+# Self-Healing Local Storage Function
+remount_local_storage() {
+    echo -e "\n${DIM}[*] Checking and restoring local storage mount states...${RESET}"
+    if [ -x /usr/local/bin/mount_storage_startup.sh ]; then
+        sudo /usr/local/bin/mount_storage_startup.sh >/dev/null 2>&1 || true
+    elif [ -x "${SCRIPT_DIR}/mount_fat_and_hdd.sh" ]; then
+        sudo "${SCRIPT_DIR}/mount_fat_and_hdd.sh" >/dev/null 2>&1 || true
+    fi
+}
+trap remount_local_storage EXIT INT TERM
+
 # Styling
 BOLD="\033[1m"
 GREEN="\033[1;32m"
@@ -311,6 +322,9 @@ while true; do
             break
             ;;
     esac
+
+    # Ensure drives are safely remounted after any tool operation (preventing lost SHARED_FAT)
+    remount_local_storage
 
     echo -e "\n${DIM}Press Enter to return to main menu...${RESET}"
     read -r _dummy

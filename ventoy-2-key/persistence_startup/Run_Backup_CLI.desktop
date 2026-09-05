@@ -4,6 +4,6 @@ Type=Application
 Name=🚀 Run Backup Assistant (CLI)
 Comment=Automated Clonezilla & Rescuezilla Network Backup
 Exec=xfce4-terminal --title="🚀 Run Backup Assistant" --hold --geometry=105x32 -e "sudo /usr/local/bin/run_rescuezilla_backup_cli.sh"
-Icon=utilities-terminal
+Icon=org.xfce.terminal
 Terminal=false
 StartupNotify=true
