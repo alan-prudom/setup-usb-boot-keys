@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=🛡️ Unified Rescue Suite (Backup, Restore, Clone, Explore)
+Comment=Interactive suite for Clonezilla & Rescuezilla network operations
+Exec=xfce4-terminal --title="🛡️ RESCUE SUITE LAUNCHER" --hold --geometry=120x40 -e "sudo bash /scripts/rescue_suite_launcher.sh"
+Icon=system-software-install
+Terminal=false
+StartupNotify=true
