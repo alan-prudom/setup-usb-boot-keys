@@ -107,6 +107,7 @@ QEMU_ARGS=(
     -m "$RAM_SIZE"
     -netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22"
     -device "virtio-net-pci,netdev=net0"
+    -global "isa-fdc.driveA="
     -serial "file:${VM_SERIAL_LOG}"
 )
 
