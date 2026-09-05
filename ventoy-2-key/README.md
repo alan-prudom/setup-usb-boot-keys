@@ -128,9 +128,11 @@ All scripts and configuration templates are tracked in git under `devices/setup-
 4. **Tier 4: Desktop Launchers with Window Retention (`--hold`)**
    - Launchers on `/home/ubuntu/Desktop/` maintain terminal logs open on exit.
 
-### 6.2 Automatic Network Storage & Unified Rescue Suite
+#### 6.2 Automatic Network Storage & Unified Rescue Suite
 - **SSHFS Network Storage (`home40`):** Systemd user service `mount-home40.service` and helper `/usr/local/bin/mount_home40_backup.sh` auto-mount remote storage at `192.168.1.34:/media/alan/home40/Clonezilla` to `/mnt/home40_clonezilla` and bind-mount to `/home/partimag`.
-- **Unified 5-Function Rescue Suite (`rescue_suite_launcher.sh`):** Interactive menu covering the 5 core Rescuezilla operations (Backup, Restore, Clone, Verify, Image Explorer), network connection, local storage mounting, post-backup wizard, and native GUI launch.
+- **Unified 5-Function Rescue Suite (`rescue_suite_launcher.sh`):** Interactive menu covering the 5 core Rescuezilla operations (Backup, Restore, Clone, Verify, Image Explorer), network connection, local storage mounting, post-backup wizard, **diagnostic bundle log export**, and native GUI launch:
+  * Self-Healing Storage: Features an `EXIT/INT/TERM` signal trap and post-operation remount check (`remount_local_storage()`) that automatically restores `/media/ubuntu/SHARED_FAT` if Clonezilla unmounts partitions during imaging pre-flight checks.
+  * Option `[9] 📦 Export Diagnostic Bundle`: Harvests guest logs, serial console telemetry, host kernel dmesg, and desktop validation directly to `/media/ubuntu/SHARED_FAT/`.
 - **Desktop Launchers:** Deployed to `/home/ubuntu/Desktop/` with `--hold` retention:
   * `Rescue_Suite.desktop` (Unified Rescue & Backup Suite)
   * `Mount_Network_home40.desktop` (Connect Network Storage)
@@ -141,7 +143,11 @@ All scripts and configuration templates are tracked in git under `devices/setup-
 - **Technical Insight:** Modern Ubuntu Casper (Ubuntu 24.10 / Rescuezilla 2.6.1) constructs rootfs using OverlayFS with `upperdir=/cow/upper` and `workdir=/cow/work`.
 - **Resolution:** `deploy_four_tier_persistence.sh` deploys binaries, autostart configurations, systemd services, and desktop launchers into both `$MNT/upper/` (live overlay layer) and `$MNT/` (raw container fallback).
 
-### 6.4 Tri-Tier Operational Script Distribution
+### 6.4 Pre-Packaged OpenSSH Server & Automated Authentication
+- **Dedicated Daemon:** Live ISO squashfs omits `openssh-server`. `deploy_four_tier_persistence.sh` packages exact Ubuntu 24.10 Oracular `openssh-server 9.7p1-7ubuntu4.3` binaries directly into the persistence container.
+- **Privilege Separation & Authentication:** Automatically provisions `sshd` privsep user/group, authorizes `/home/ubuntu/.ssh/id_rsa`, sets default password `live` for both `ubuntu` and `root`, and enables remote root login in `/etc/ssh/sshd_config`.
+
+### 6.5 Tri-Tier Operational Script Distribution
 All Clonezilla imaging, Rescue Suite, and post-mortem diagnostic tools are mirrored across three access points:
 1. **Live System Overlay:** `/scripts/` & `/usr/local/bin/` (and Desktop icons `Rescue_Suite.desktop`, `Mount_Network_home40.desktop`, `Run_Backup_CLI.desktop`, `Post_Backup_Wizard.desktop`).
 2. **Shared FAT32 Partition:** `/ntfs/scripts/` (accessible under Rescuezilla at `/media/ubuntu/SHARED_FAT/scripts/`).
@@ -161,7 +167,7 @@ For rapid regression testing and script verification without bare-metal reboots:
   ```
   - **Boot Pipeline:**
     * **Option A:** Full Ventoy MBR/EFI emulation via temporary copy-on-write overlay (`qcow2`) backing `/dev/sdb`.
-    * **Option B:** Direct `rescuezilla-2.6.1-64bit.oracular.iso` boot with attached `rescuezilla-persistence.dat`.
+    * **Option B:** Direct `rescuezilla-2.6.1-64bit.oracular.iso` boot with attached `rescuezilla-persistence.dat`, `noprompt` clean shutdown, and floppy controller error suppression (`isa-fdc.fdtypeA=none`).
   - **Display Modes:**
     * **Native Window:** Direct X11 GTK desktop window.
     * **TigerVNC Viewer:** Decoupled RFB client on `localhost:5901`.
@@ -171,7 +177,10 @@ For rapid regression testing and script verification without bare-metal reboots:
   ```bash
   ./devices/setup-usb-boot-keys/ventoy-2-key/stimulate_vm_tests.sh
   ```
-  Connects to guest on `localhost:2222`, validates block devices, verifies persistence OverlayFS mounts, and inspects desktop entry validity non-interactively.
+  Connects to guest on `localhost:2222` with autonomous password fallback (`live`), validates block devices, verifies persistence OverlayFS mounts, and inspects desktop entry validity non-interactively.
 
-
-
+* **Log Export Utility (`export_vm_and_system_logs_to_fat.sh`):**
+  ```bash
+  sudo ./devices/setup-usb-boot-keys/ventoy-2-key/export_vm_and_system_logs_to_fat.sh
+  ```
+  Harvests VM serial telemetry, QEMU runtime logs, host kernel dmesg, and guest persistence storage logs into a timestamped bundle on `/ntfs/` (Partition 4 `SHARED FAT`).

@@ -84,6 +84,9 @@ graph TD
 | **TC-13** | POSIX Shell Portability | Shell backup scripts | Validate execution of backup runners under Dash (`/bin/sh`) without syntax errors (`[[: not found`). | Strict POSIX syntax (`case` blocks) executes cleanly under Dash. | **PASS** (All runners verified with Dash) |
 | **TC-14** | VM Emulation Lab | `run_test_vm.sh` | Validate VM execution of Option A (Ventoy CoW overlay) and Option B (direct persistent kernel launch) with Native GTK and TigerVNC viewers. | VM boots cleanly, isolates host storage, and activates persistence. | **PASS** (Option A & B verified; screenshots captured) |
 | **TC-15** | SSH Automation in Persistence | `rescuezilla-persistence.dat` | Verify `ssh.service` is enabled in systemd multi-user target and started automatically on live boot. | Port 2222 connects cleanly from `stimulate_vm_tests.sh` using `/home/alan/.ssh/id_rsa`. | **PASS** (Auto-start verified) |
+| **TC-16** | OpenSSH Server Packaging | `deploy_four_tier_persistence.sh` | Verify extraction of Oracular `openssh-server 9.7p1` into persistence, creation of `sshd` privsep user, and autonomous authentication (`ubuntu:live`). | Guest VM accepts SSH connections on port 2222 and executes commands. | **PASS** (Remote command execution verified via `stimulate_vm_tests.sh`) |
+| **TC-17** | QEMU Clean Shutdown (`noprompt`) | `run_test_vm.sh` | Verify VM powers off cleanly upon guest `poweroff` without blocking on Casper's media eject prompt. | QEMU exits with status 0 in under 3 seconds without process hang. | **PASS** (Clean ACPI poweroff verified) |
+| **TC-18** | Self-Healing Storage Remount | `rescue_suite_launcher.sh` | Verify `remount_local_storage` signal trap restores `/media/ubuntu/SHARED_FAT` and desktop symlinks if Clonezilla unmounts source partitions. | Partition remounts automatically after operation aborts or finishes. | **PASS** (Trap and remount logic verified) |
 
 
 
