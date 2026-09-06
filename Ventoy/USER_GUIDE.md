@@ -114,16 +114,21 @@ sudo bash run_rescuezilla_backup_cli.sh
 #### Workflow:
 1. **Network Mount:** Automatically mounts remote backup target (`192.168.1.34:/media/alan/home40/Clonezilla`) to `/mnt/backup` via SSH key authentication (`id_rsa`).
 2. **Drive Selection:**
-   * `[1] /dev/sda` — Internal 1TB Drive (Windows 11 OS + Data).
-   * `[2] /dev/sdb` — USB Drive (Ventoy + Installed Linux).
-3. **Partition Scope:**
-   * Windows 11 only: `sda1` (System Reserved) + `sda2` (OS partition).
-   * Full Drive: All partitions.
-   * Custom Selection: Space-separated partition list.
+   * `[1] /dev/sda` — Internal Drive (Windows OS + Data). Automatically tags machine model (e.g. `HP-EliteBook-8470p` or `HP-ZBook-15u-G5`).
+   * `[2] /dev/sdb` — USB Drive (`Ventoy-USB`).
+3. **Partition Scope & Dynamic Naming:**
+   * Windows OS Partitions: `sda1` (System Reserved) + `sda2` (OS partition) -> `HP-EliteBook-8470p-sda1-sda2-<timestamp>-img`.
+   * Full Disk: All partitions on drive -> `HP-EliteBook-8470p-all-<timestamp>-img`.
+   * Custom Selection: Space-separated partition list (e.g. `sda2`) -> `HP-EliteBook-8470p-sda2-<timestamp>-img`.
 4. **Engine Selection:**
    * **Clonezilla Native (`ocs-sr`)** *(Recommended)*: Uses Partclone directly with multi-threaded gzip compression.
    * **Rescuezilla Engine (`rescuezillapy`)**: Runs Python-driven partition imaging.
-5. **Telemetry Export:** Automatically writes `${SCRIPT_DIR}/latest_backup.env` and creates a symlink `latest_backup.log`.
+5. **Hardware Rescue Mode Selection:**
+   * **`[1]` Standard Mode**: Strict integrity check (aborts on bad sectors to prevent imaging damaged clusters).
+   * **`[2]` Rescue Mode (`--rescue`)**: Skips and zeroes unreadable sectors to ensure completion on degrading flash/rotational media.
+6. **Telemetry & Automated Post-Backup Verification:**
+   * Writes `${SCRIPT_DIR}/latest_backup.env` and creates a symlink `latest_backup.log`.
+   * Prompts to run the Post-Backup Wizard (`--no-pause`) to assess zeroed bad sectors or verify error-free completion.
 
 ---
 
@@ -140,7 +145,7 @@ If using the graphical Rescuezilla application:
    * **Remote Path:** `/media/alan/home40/Clonezilla`
    * **Username:** `alan`
    * **Password:** *(Leave blank)*
-   * **SSH Identity File:** Click browse and point to `id_rsa` on your NTFS USB partition (`sdb4`).
+   * **SSH Identity File:** Click browse and point to `id_rsa` on your USB data partition (`sdb4`).
 5. **Step 5 - Compression & Launch:** Select `gzip` or default compression and click **Start Backup**.
 
 ---
@@ -148,7 +153,7 @@ If using the graphical Rescuezilla application:
 ## 4. Error Investigation & Diagnostic Toolkit
 
 ### A. Unified Rescue Suite Launcher (`rescue_suite_launcher.sh`)
-When booted into Rescuezilla Live (or directly from Ubuntu), launch the unified 5-function suite:
+When booted into Rescuezilla Live (or directly from Ubuntu), launch the unified suite:
 
 ```bash
 sudo /scripts/rescue_suite_launcher.sh
@@ -157,13 +162,16 @@ sudo ./rescue_suite_launcher.sh
 ```
 
 #### Suite Capabilities:
-* **`[1]` Backup Image:** Interactive Clonezilla `ocs-sr` native CLI backup with automated network mount and error trapping.
+* **`[1]` Backup Image:** Interactive Clonezilla `ocs-sr` native CLI backup with automated network mount, dynamic naming, and rescue mode.
 * **`[2]` Restore Image:** Select and restore remote disk/partition images safely with confirmation prompts.
 * **`[3]` Disk-to-Disk Clone:** Direct clone between physical disks using `ocs-onthefly`.
 * **`[4]` Verify Image Integrity:** Runs non-destructive Partclone extraction test to verify remote image readability.
 * **`[5]` Image Explorer:** Loopback mounts Partclone gzip images directly to browse and extract individual files.
 * **`[6]` Mount Network Storage:** Establishes headless SSHFS mount to `192.168.1.34:/media/alan/home40/Clonezilla`.
-* **`[7]` Post-Backup Diagnostic Wizard:** Direct launch of telemetry and error triage wizard.
+* **`[7]` Mount Local Storage:** Mounts USB Data Partition (NTFS or FAT32) and internal disks read-only.
+* **`[8]` Post-Backup Diagnostic Wizard:** Direct launch of telemetry and bad sector triage wizard.
+* **`[9]` Export Diagnostic Bundle:** Executes `export_diagnostic_bundle.sh` to harvest logs, SMART telemetry, and OS state to USB data storage.
+* **`[10]` Launch Rescuezilla GUI:** Native Rescuezilla graphical window.
 
 ---
 
