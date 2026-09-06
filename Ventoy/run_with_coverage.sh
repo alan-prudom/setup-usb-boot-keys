@@ -67,10 +67,19 @@ echo "✓ Interactive Session Finished!"
 echo "  • Transcript (Clean Text) : ${CLEAN_LOG}"
 echo "  • Transcript (Raw Log)    : ${RAW_LOG}"
 
-# If uv is installed, compute coverage immediately
+# Compute coverage immediately using python3 or uv
+PYTHON_BIN=""
 if command -v uv >/dev/null 2>&1; then
-    echo "[*] Generating lcov coverage report..."
-    uv run python - << PY_EOF
+    PYTHON_BIN="uv run python"
+elif command -v python3 >/dev/null 2>&1; then
+    PYTHON_BIN="python3"
+elif command -v python >/dev/null 2>&1; then
+    PYTHON_BIN="python"
+fi
+
+if [ -n "$PYTHON_BIN" ]; then
+    echo "[*] Generating lcov coverage report using $PYTHON_BIN..."
+    $PYTHON_BIN - << PY_EOF
 import re
 import os
 
