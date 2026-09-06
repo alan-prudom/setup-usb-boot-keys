@@ -90,3 +90,21 @@ mount_detected_data_partition() {
     $DETECTED_P4_DRIVER -o $DETECTED_P4_OPTS "$DETECTED_P4_DEV" "$mnt"
     return $?
 }
+
+# Dynamically detect hardware machine model (e.g. HP-EliteBook-8470p, HP-ZBook-15u-G5)
+detect_machine_model() {
+    local model=""
+    for p in "/sys/class/dmi/id/product_name" "/sys/devices/virtual/dmi/id/product_name"; do
+        if [ -f "$p" ]; then
+            model=$(tr -s ' \t' '-' < "$p" | tr -cd '[:alnum:]-_')
+            if [ -n "$model" ] && [ "$model" != "None" ] && [ "$model" != "System-Product-Name" ]; then
+                echo "$model"
+                return 0
+            fi
+        fi
+    done
+    local host
+    host=$(hostname -s 2>/dev/null || echo "Host")
+    echo "$host"
+}
+

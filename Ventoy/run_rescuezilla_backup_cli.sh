@@ -69,8 +69,14 @@ echo -e "${CYAN}================================================================
 echo -e "${BOLD}       🚀 LIVE COMMAND-LINE BACKUP ASSISTANT (RESCUE/CLONE)          ${RESET}"
 echo -e "${CYAN}======================================================================${RESET}"
 
-# 1. Locate SSH Key
+# 1. Locate SSH Key & Load Helper Libraries
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "${SCRIPT_DIR}/lib/lib_hardware_detect.sh" ]; then
+    source "${SCRIPT_DIR}/lib/lib_hardware_detect.sh"
+elif [ -f "/scripts/lib/lib_hardware_detect.sh" ]; then
+    source "/scripts/lib/lib_hardware_detect.sh"
+fi
+
 KEY_FILE="${SCRIPT_DIR}/id_rsa"
 REMOTE_SERVER="192.168.1.34"
 REMOTE_PATH="/media/alan/home40/Clonezilla"
@@ -133,14 +139,18 @@ if [ "$drive_choice" = "2" ]; then
     DEFAULT_DRIVE_TAG="Ventoy-USB"
 else
     TARGET_DRIVE="/dev/sda"
-    DEFAULT_DRIVE_TAG="HP-ZBook"
+    if declare -f detect_machine_model >/dev/null 2>&1; then
+        DEFAULT_DRIVE_TAG="$(detect_machine_model)"
+    else
+        DEFAULT_DRIVE_TAG="Host-PC"
+    fi
 fi
 
 # 4. Select Partition Scope
 echo -e "\n${BOLD}[3/4] Partition Backup Scope for ${TARGET_DRIVE}${RESET}"
 echo -e "${DIM}  ℹ️  Why we ask this: Backing up an entire 1TB disk takes much longer and consumes massive network storage, whereas backing up only the OS partitions (sda1+sda2) takes minutes and contains everything required to restore Windows.${RESET}"
 if [ "$TARGET_DRIVE" = "/dev/sda" ]; then
-    echo -e "  ${CYAN}[1]${RESET} Windows 11 Only: sda1 (System Reserved) + sda2 (OS) [Recommended]"
+    echo -e "  ${CYAN}[1]${RESET} Windows OS Partitions: sda1 (System Reserved) + sda2 (OS) [Recommended]"
     echo -e "  ${CYAN}[2]${RESET} Entire Internal Disk: all partitions on /dev/sda"
     echo -e "  ${CYAN}[3]${RESET} Custom selection (specify exact partition list)"
 else
@@ -155,15 +165,12 @@ case "$scope_choice" in
     1)
         if [ "$TARGET_DRIVE" = "/dev/sda" ]; then
             PARTITIONS_LIST="sda1 sda2"
-            SCOPE_TAG="Win11"
         else
             PARTITIONS_LIST="sdb1 sdb2 sdb3"
-            SCOPE_TAG="Ventoy-Core"
         fi
         ;;
     2)
         PARTITIONS_LIST="all"
-        SCOPE_TAG="FullDisk"
         ;;
     3)
         while true; do
@@ -176,9 +183,15 @@ case "$scope_choice" in
             fi
             echo -e "  ${YELLOW}⚠️  Partition list cannot be empty.${RESET}"
         done
-        SCOPE_TAG="Custom"
         ;;
 esac
+
+# Derive scope tag directly from partition list (e.g. 'all', 'sda2', or 'sda1-sda2')
+if [ "$PARTITIONS_LIST" = "all" ]; then
+    SCOPE_TAG="all"
+else
+    SCOPE_TAG=$(echo "$PARTITIONS_LIST" | tr ' ' '-')
+fi
 
 TIMESTAMP="$(date +%Y-%m-%d-%H%M)"
 DEFAULT_IMAGE_NAME="${DEFAULT_DRIVE_TAG}-${SCOPE_TAG}-${TIMESTAMP}-img"
