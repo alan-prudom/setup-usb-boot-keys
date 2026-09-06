@@ -83,6 +83,7 @@ for TDIR in "${TARGET_DIRS[@]}"; do
         "mount_fat_and_hdd.sh" \
         "export_vm_and_system_logs_to_fat.sh" \
         "export_diagnostic_bundle.sh" \
+        "run_with_coverage.sh" \
         "rescue_suite_launcher.sh"; do
         if [ -f "${SCRIPT_DIR}/${script_file}" ]; then
             cp "${SCRIPT_DIR}/${script_file}" "$TDIR/scripts/"
@@ -93,6 +94,10 @@ for TDIR in "${TARGET_DIRS[@]}"; do
     if [ -d "${SCRIPT_DIR}/lib" ]; then
         mkdir -p "$TDIR/scripts/lib"
         cp -a "${SCRIPT_DIR}/lib/"* "$TDIR/scripts/lib/" 2>/dev/null || true
+    fi
+    if [ -d "${SCRIPT_DIR}/tests" ]; then
+        mkdir -p "$TDIR/scripts/tests"
+        cp -a "${SCRIPT_DIR}/tests/"* "$TDIR/scripts/tests/" 2>/dev/null || true
     fi
 
     # 2. Tier 2: Startup Mount Automation Script
