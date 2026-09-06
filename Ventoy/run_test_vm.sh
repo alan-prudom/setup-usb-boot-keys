@@ -208,7 +208,15 @@ else
         echo -e "${RED}Error: Rescuezilla ISO not found at $ISO_PATH${RESET}"
         exit 1
     fi
-    BOOT_DIR="/media/alan/Ventoy1/boot_cache"
+    BOOT_DIR="/media/devmon/Ventoy/boot_cache"
+    if [ ! -d "$BOOT_DIR" ]; then
+        for cand_dir in "/media/alan/Ventoy1/boot_cache" "/media/alan/Ventoy/boot_cache" "${SCRIPT_DIR}/boot_cache"; do
+            if [ -d "$cand_dir" ]; then
+                BOOT_DIR="$cand_dir"
+                break
+            fi
+        done
+    fi
     if [ -f "${BOOT_DIR}/vmlinuz" ] && [ -f "${BOOT_DIR}/initrd.lz" ]; then
         echo -e "  • Using direct kernel launch with persistent overlay parameter..."
         QEMU_ARGS+=(
