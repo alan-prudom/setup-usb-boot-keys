@@ -192,18 +192,33 @@ IMAGE_NAME="$(echo "$IMAGE_NAME" | tr ' ' '_')"
 DEST_DIR="${MOUNT_POINT}/${IMAGE_NAME}"
 
 # 5. Select Engine
-echo -e "\n${BOLD}[4/4] Imaging Engine Selection${RESET}"
+echo -e "\n${BOLD}[4/5] Imaging Engine Selection${RESET}"
 echo -e "${DIM}  ℹ️  Why we ask this: Clonezilla's native CLI ('ocs-sr') is the battle-tested standard with 15+ years of stability in terminal mode. Rescuezilla's CLI is labeled experimental and may format output differently.${RESET}"
 echo -e "  ${CYAN}[1]${RESET} Clonezilla Native Engine (ocs-sr) [Standard, Ultra-Reliable]"
 echo -e "  ${CYAN}[2]${RESET} Rescuezilla Python Engine (rescuezillapy)"
 engine_choice=$(prompt_choice "Select imaging engine [1-2]: " 1 2)
 
-# 6. Final Execution Confirmation
+# 6. Rescue Mode Selection (Bad Sectors Handling)
+echo -e "\n${BOLD}[5/5] Bad Sector & Hardware Rescue Handling${RESET}"
+echo -e "${DIM}  ℹ️  Why we ask this: If the source drive has physical degradation (like SanDisk/Crucial SSDs with uncorrectable sectors), standard Partclone aborts immediately to protect data integrity. In Rescue Mode ('--rescue'), Partclone continues past bad blocks and zeroes unreadable sectors so imaging finishes successfully.${RESET}"
+echo -e "  ${CYAN}[1]${RESET} Standard Mode (Strict integrity check; abort if bad sectors are found)"
+echo -e "  ${CYAN}[2]${RESET} 🚨 Rescue Mode (--rescue: bypass bad sectors, zero unreadable blocks, continue imaging)"
+rescue_choice=$(prompt_choice "Select Rescue Mode [1-2, Default 1]: " 1 2)
+RESCUE_FLAG=""
+RESCUEZILLA_EXTRA=""
+if [ "$rescue_choice" = "2" ]; then
+    RESCUE_FLAG="--rescue"
+    RESCUEZILLA_EXTRA="--rescue"
+    echo -e "  ${YELLOW}⚠️  Rescue Mode enabled: '--rescue' flag will be passed to Partclone.${RESET}"
+fi
+
+# 7. Final Execution Confirmation
 echo -e "\n${BOLD}--- Pre-Flight Configuration Summary ---${RESET}"
 echo -e "  • Target Disk      : ${CYAN}${TARGET_DRIVE}${RESET}"
 echo -e "  • Partitions       : ${CYAN}${PARTITIONS_LIST}${RESET}"
 echo -e "  • Destination Path : ${CYAN}${DEST_DIR}${RESET}"
 echo -e "  • Selected Engine  : ${CYAN}$([ "$engine_choice" = "2" ] && echo "Rescuezilla (rescuezillapy)" || echo "Clonezilla (ocs-sr)")${RESET}"
+echo -e "  • Rescue Mode      : ${CYAN}$([ "$rescue_choice" = "2" ] && echo "ENABLED (--rescue)" || echo "Standard (Strict)")${RESET}"
 
 echo -e "\n${DIM}  ℹ️  Why we ask for confirmation: Starting the backup initiates intensive disk reads and multi-gigabyte network writes. Verifying options now prevents imaging with incorrect parameters.${RESET}"
 if ! prompt_yes_no "Start backup operation now? (y/n): "; then
@@ -225,10 +240,10 @@ if [ "$engine_choice" = "1" ] || ! command -v rescuezillapy >/dev/null 2>&1; the
 
     DRIVE_NAME="$(basename "$TARGET_DRIVE")"
     if [ "$PARTITIONS_LIST" = "all" ]; then
-        ocs-sr -q2 -c -j2 -z1p -i 4096 -sfsck -scs -p true savedisk "$IMAGE_NAME" "$DRIVE_NAME" 2>&1 | tee "$LOG_FILE"
+        ocs-sr -q2 -c -j2 -z1p -i 4096 -sfsck -scs -p true $RESCUE_FLAG savedisk "$IMAGE_NAME" "$DRIVE_NAME" 2>&1 | tee "$LOG_FILE"
         BACKUP_EXIT_CODE="${PIPESTATUS[0]}"
     else
-        ocs-sr -q2 -c -j2 -z1p -i 4096 -sfsck -scs -p true saveparts "$IMAGE_NAME" $PARTITIONS_LIST 2>&1 | tee "$LOG_FILE"
+        ocs-sr -q2 -c -j2 -z1p -i 4096 -sfsck -scs -p true $RESCUE_FLAG saveparts "$IMAGE_NAME" $PARTITIONS_LIST 2>&1 | tee "$LOG_FILE"
         BACKUP_EXIT_CODE="${PIPESTATUS[0]}"
     fi
 else
@@ -237,6 +252,7 @@ else
             --source "$TARGET_DRIVE" \
             --destination "$DEST_DIR" \
             --description "CLI_Backup" \
+            $RESCUEZILLA_EXTRA \
             --compression-format gzip 2>&1 | tee "$LOG_FILE"
         BACKUP_EXIT_CODE="${PIPESTATUS[0]}"
     else
@@ -245,6 +261,7 @@ else
             --partitions $PARTITIONS_LIST \
             --destination "$DEST_DIR" \
             --description "CLI_Backup" \
+            $RESCUEZILLA_EXTRA \
             --compression-format gzip 2>&1 | tee "$LOG_FILE"
         BACKUP_EXIT_CODE="${PIPESTATUS[0]}"
     fi
