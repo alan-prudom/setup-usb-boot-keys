@@ -275,6 +275,13 @@ XDG_EOF
         fi
     fi
 
+    # 5b. Fix UsrMerge modules symlink & load nbd on boot
+    mkdir -p "$TDIR/lib" "$TDIR/etc"
+    ln -sf "/usr/lib/modules" "$TDIR/lib/modules"
+    if [ ! -f "$TDIR/etc/modules" ] || ! grep -q "^nbd" "$TDIR/etc/modules"; then
+        echo "nbd" >> "$TDIR/etc/modules"
+    fi
+
     # 6. Install OpenSSH Server Binaries into Persistence
     if [ -d "/tmp/openssh_extract" ]; then
         echo "  • Installing openssh-server binaries & config into $TDIR..."
