@@ -115,12 +115,81 @@ Per user approval (*"both please"*), the raw text logs from the recent failed ru
 
 ---
 
-## 5. Summary of Commits & Working Tree Status
+## 5. Rescue Backup Execution Post-Mortem & Results (`/dev/sda2`)
+
+Following deployment of Rescue Mode (`--rescue`), the user initiated the backup of `/dev/sda2` over SSHFS:
+* **Image Name**: `HP-Elitebook-sda2-2026-09-06-0036.img`
+* **Total Transferred Data**: ~75.3 GiB (32,901,768 blocks).
+* **Elapsed Duration**: 174.1 minutes (~2.9 hours).
+* **Physical Bad Sectors Bypassed**: **136 unreadable sectors** were skipped and zeroed out by Partclone instead of aborting the entire run.
+* **Result**: Backup completed successfully, preserving the filesystem and leaving a fully restorable image stream.
+
+---
+
+## 6. Live GUI & TUI Post-Mortem: Diagnostic Bundle, Launcher & Banner Fixes
+
+### 6.1 Screenshot Bug Post-Mortem (`Screenshot_2026-09-06_05-51-10.png`)
+* **Observed Failure**: When selecting Option `[9]` (Export Diagnostic Bundle) from [`Ventoy/rescue_suite_launcher.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/rescue_suite_launcher.sh), the terminal printed:
+  `export_vm_and_system_logs_to_fat.sh not found`.
+* **Root Cause**: The script was looking strictly for `/usr/local/bin/export_vm_and_system_logs_to_fat.sh`, which assumed a FAT32-only partition and did not exist if Partition 4 was formatted as NTFS or mounted elsewhere.
+
+### 6.2 Universal Diagnostic Bundler (`export_diagnostic_bundle.sh`)
+* Created [`Ventoy/export_diagnostic_bundle.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/export_diagnostic_bundle.sh):
+  * Sources [`Ventoy/lib/lib_hardware_detect.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/lib/lib_hardware_detect.sh).
+  * Dynamically discovers USB Partition 4 whether formatted as NTFS (`ntfs-3g`) or FAT32 (`vfat`).
+  * Aggregates Partclone logs, Clonezilla logs, serial console traces, `lsblk`, `fdisk`, filesystem usage, and hardware SMART logs (`smartctl -a`) into a timestamped bundle folder (`diagnostic_bundle_<TIMESTAMP>/`).
+
+### 6.3 Post-Backup Wizard Status Banner & Double Pause
+* **Accurate Rescue Banner in [`Ventoy/post-backup-wizard.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/post-backup-wizard.sh)**:
+  * Previously reported `🟢 STATUS: BACKUP COMPLETED SUCCESSFULLY (Zero Errors)` even after a rescue run.
+  * Added regex detection for `Can't read sector at|lost data|unreadable sector`.
+  * Now prints: `🟡 STATUS: RESCUE BACKUP COMPLETED (<N> Bad Sectors Zeroed)`.
+* **Double Pause Elimination**:
+  * Added `--no-pause` flag support when invoked directly from `run_rescuezilla_backup_cli.sh`, preventing redundant "Press any key to close this terminal" prompts.
+
+### 6.4 Launcher Label Decoupling
+* In [`Ventoy/rescue_suite_launcher.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/rescue_suite_launcher.sh):
+  * Generalized Option `[7]` ("Mount Local Storage") and Option `[9]` ("Export Diagnostic Bundle") to refer to "USB Data Partition" rather than hardcoding "FAT".
+
+---
+
+## 7. Dynamic Machine Model & Partition Scope Naming
+
+### 7.1 Problem Statement
+* Default image names previously hardcoded `DEFAULT_DRIVE_TAG="HP-ZBook"` and `SCOPE_TAG="Win11"` or `"Custom"`.
+* When running on the HP EliteBook, the default image name incorrectly showed `HP-ZBook-Win11-...`.
+* The user requested:
+  1. Default image name must accurately reflect the real machine model (e.g. `HP-EliteBook-8470p`).
+  2. Include partition base name(s) (e.g. `sda2`, `sda1-sda2`) or `all`.
+
+### 7.2 Implementation in `lib_hardware_detect.sh` & `run_rescuezilla_backup_cli.sh`
+1. **`detect_machine_model()` in [`Ventoy/lib/lib_hardware_detect.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/lib/lib_hardware_detect.sh)**:
+   * Inspects `/sys/class/dmi/id/product_name` and `/sys/devices/virtual/dmi/id/product_name`.
+   * Replaces whitespace with hyphens and strips non-alphanumeric characters.
+   * Produces clean strings like `HP-EliteBook-8470p` and `HP-ZBook-15u-G5`.
+2. **Dynamic Generation in [`Ventoy/run_rescuezilla_backup_cli.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/run_rescuezilla_backup_cli.sh)**:
+   * `DEFAULT_DRIVE_TAG="$(detect_machine_model)"`.
+   * If `PARTITIONS_LIST="all"`, `SCOPE_TAG="all"`.
+   * If specific partitions are chosen (e.g. `sda1 sda2` or `sda2`), `SCOPE_TAG=$(echo "$PARTITIONS_LIST" | tr ' ' '-')`.
+   * Resulting defaults:
+     - Windows OS partitions: `HP-EliteBook-8470p-sda1-sda2-<timestamp>-img`
+     - Custom partition: `HP-EliteBook-8470p-sda2-<timestamp>-img`
+     - Full drive: `HP-EliteBook-8470p-all-<timestamp>-img`
+3. **Persistence Deployment Automation**:
+   * Updated [`Ventoy/deploy_four_tier_persistence.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/deploy_four_tier_persistence.sh) to recursively deploy `Ventoy/lib/` into `/scripts/lib/` and `/upper/scripts/lib/`.
+
+---
+
+## 8. Summary of Commits & Working Tree Status
 
 | Commit | Summary | Scope |
 | :--- | :--- | :--- |
 | **`a6233de`** | `feat(backup): add interactive Rescue Mode prompt with --rescue flag for degraded disks` | Core CLI backup runner |
 | **`577fe35`** | `docs(telemetry): save sda2 partclone bad sector error log and sandisk SMART telemetry` | Telemetry logs |
+| **`2ef3f80`** | `docs(ventoy): add comprehensive technical notes for sda degradation forensics, rescue mode, and telemetry logs` | Documentation |
+| **`3f5c6c6`** | `fix(rescue-suite): add universal diagnostic bundler, refine rescue status banner, eliminate double pause, and generalize storage labels` | Diagnostic suite & TUI |
+| **`28ecb1d`** | `feat(backup): dynamically set machine model and partition names in default image name` | Hardware detection & image naming |
 
-* **Working Tree**: Completely clean, zero uncommitted changes.
-* **Remote Parity**: Synchronized with `origin/main` and mirrored to `~/Documents/setup-usb`.
+* **Persistence Overlay**: Deployed and active in `/media/devmon/Ventoy/rescuezilla-persistence.dat`.
+* **Repository Parity**: Primary repository (`setup-usb-boot-keys`) and local mirror (`~/Documents/setup-usb`) are fully synchronized.
+* **Strict "No PNGs" Policy**: Fully adhered to across all changes and commits.

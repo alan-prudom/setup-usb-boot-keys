@@ -90,6 +90,10 @@ for TDIR in "${TARGET_DIRS[@]}"; do
             ln -sf "/scripts/${script_file}" "$TDIR/usr/local/bin/${script_file}"
         fi
     done
+    if [ -d "${SCRIPT_DIR}/lib" ]; then
+        mkdir -p "$TDIR/scripts/lib"
+        cp -a "${SCRIPT_DIR}/lib/"* "$TDIR/scripts/lib/" 2>/dev/null || true
+    fi
 
     # 2. Tier 2: Startup Mount Automation Script
     cat << 'INNER_EOF' > "$TDIR/usr/local/bin/mount_storage_startup.sh"
