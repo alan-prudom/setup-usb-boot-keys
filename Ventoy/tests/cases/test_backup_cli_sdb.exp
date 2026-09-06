@@ -1,0 +1,126 @@
+#!/usr/bin/expect -f
+# ==============================================================================
+# test_backup_cli_sdb.exp
+# Exercises:
+#   1. Target drive selection: [2] /dev/sdb (Ventoy-USB)
+#   2. USB partition scope: [1] sdb1 sdb2 sdb3
+#   3. Dynamic naming verification: Ventoy-USB-sdb1-sdb2-sdb3-<timestamp>-img
+#   4. Engine selection: [2] Rescuezilla CLI (rescuezillapy)
+#   5. Standard Mode selection: [1] Standard
+#   6. Invalid confirmation input: 'invalid' followed by 'n'
+# ==============================================================================
+
+set timeout 20
+set script_path [lindex $argv 0]
+if {"$script_path" == ""} {
+    set script_path "/home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/run_rescuezilla_backup_cli.sh"
+}
+
+send_user "\n=== TEST_CASE: Backup CLI - USB /dev/sdb, Rescuezilla Engine & Yes/No Validation ===\n"
+
+spawn bash "$script_path"
+
+# 1. Header Banner Check
+expect {
+    "LIVE COMMAND-LINE BACKUP ASSISTANT" {
+        send_user "\nPASS: Verified Welcome Banner\n"
+    }
+    timeout { exit 1 }
+}
+
+# 2. Storage check
+expect {
+    "Verified READ-WRITE access" {
+        send_user "\nPASS: Verified Remote Storage Connection\n"
+    }
+    timeout { exit 1 }
+}
+
+# 3. Target Drive Selection: Select Option 2 (/dev/sdb)
+expect {
+    "Select drive to backup" {
+        send_user "\nINFO: Selecting Drive 2 (/dev/sdb)...\n"
+        send "2\r"
+    }
+    timeout { exit 1 }
+}
+
+# 4. Partition Scope: Verify USB options and select 1 (sdb1 sdb2 sdb3)
+expect {
+    "Partition Backup Scope for /dev/sdb" {
+        send_user "\nPASS: USB Partition Scope menu displayed.\n"
+    }
+    timeout { exit 1 }
+}
+
+expect {
+    "Ventoy Core Partitions: sdb1 (Ventoy) + sdb2 (EFI) + sdb3 (Linux OS)" {
+        send_user "\nPASS: Verified USB core partitions recommendation.\n"
+        send "1\r"
+    }
+    timeout { exit 1 }
+}
+
+# 5. Default Image Name Verification
+expect {
+    -re "Enter image folder name .*default: '(Ventoy-USB-sdb1-sdb2-sdb3-\[^'\]+)'" {
+        set default_name $expect_out(1,string)
+        send_user "\nPASS: Verified USB Dynamic Naming Tag: $default_name\n"
+        send "\r"
+    }
+    timeout { exit 1 }
+}
+
+# 6. Engine Selection: Select Option 2 (Rescuezilla)
+expect {
+    "Select imaging engine" {
+        send_user "\nINFO: Selecting Engine 2 (Rescuezilla Python Engine)...\n"
+        send "2\r"
+    }
+    timeout { exit 1 }
+}
+
+# 7. Hardware Rescue Mode: Select Option 1 (Standard Mode)
+expect {
+    "Bad Sector & Hardware Rescue Handling" {
+        send_user "\nINFO: Selecting Standard Mode (Option 1)...\n"
+        send "1\r"
+    }
+    timeout { exit 1 }
+}
+
+# 8. Pre-Flight Summary Check
+expect {
+    "Pre-Flight Configuration Summary" {
+        send_user "\nPASS: Pre-Flight summary verified.\n"
+    }
+    timeout { exit 1 }
+}
+
+# 9. Confirmation: Test Invalid Yes/No string, then send 'n'
+expect {
+    "Start backup operation now? (y/n):" {
+        send_user "\nINFO: Testing invalid yes/no string 'maybe'...\n"
+        send "maybe\r"
+    }
+    timeout { exit 1 }
+}
+
+expect {
+    "Invalid input 'maybe'. Please type 'y' (yes) or 'n' (no)" {
+        send_user "\nPASS: Branch verified: Invalid string 'maybe' rejected in prompt_yes_no().\n"
+        send "n\r"
+    }
+    timeout { exit 1 }
+}
+
+expect {
+    "Backup aborted by user" {
+        send_user "\nPASS: Verified clean non-destructive abort.\n"
+    }
+    timeout { exit 1 }
+}
+
+expect eof
+send_user "\n=== TEST_CASE COMPLETED SUCCESSFULLY ===\n"
+exit 0

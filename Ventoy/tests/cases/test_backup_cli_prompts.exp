@@ -1,0 +1,142 @@
+#!/usr/bin/expect -f
+# ==============================================================================
+# test_backup_cli_prompts.exp
+# ==============================================================================
+
+set timeout 20
+set script_path [lindex $argv 0]
+if {"$script_path" == ""} {
+    set script_path "/home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/run_rescuezilla_backup_cli.sh"
+}
+
+send_user "\n=== TEST_CASE: Backup Assistant CLI Prompts & Input Validation ===\n"
+
+# Spawn the target script
+spawn bash "$script_path"
+
+# 1. Header Banner Check
+expect {
+    "LIVE COMMAND-LINE BACKUP ASSISTANT" {
+        send_user "\nPASS: Verified Welcome Banner\n"
+    }
+    timeout {
+        send_user "\nFAIL: Timed out waiting for Welcome Banner\n"
+        exit 1
+    }
+}
+
+# 2. Remote Storage Connection Check
+expect {
+    "Verified READ-WRITE access" {
+        send_user "\nPASS: Verified Remote Storage Connection\n"
+    }
+    timeout {
+        send_user "\nFAIL: Remote storage mount not detected\n"
+        exit 1
+    }
+}
+
+# 3. Target Drive Selection: Test Input Validation
+expect {
+    "Select drive to backup" {
+        send_user "\nINFO: Drive selection prompt reached. Testing empty input rejection...\n"
+        send "\r"
+    }
+    timeout { exit 1 }
+}
+
+expect {
+    "Empty input (Return key) is not accepted" {
+        send_user "\nPASS: Branch verified: Empty Return key rejected.\n"
+        send "9\r"
+    }
+    timeout { exit 1 }
+}
+
+expect {
+    "Invalid option '9'" {
+        send_user "\nPASS: Branch verified: Out-of-bounds choice '9' rejected.\n"
+        send "1\r"
+    }
+    timeout { exit 1 }
+}
+
+# 4. Partition Scope: Test Dynamic Naming
+expect {
+    "Partition Backup Scope for /dev/sda" {
+        send_user "\nPASS: Partition Scope prompt displayed for /dev/sda.\n"
+        send "1\r"
+    }
+    timeout { exit 1 }
+}
+
+# 5. Backup Image Naming: Assert dynamic model name
+expect {
+    -re "Enter image folder name .*default: '(\[^'\]+)'" {
+        set default_name $expect_out(1,string)
+        send_user "\nPASS: Detected Dynamic Default Image Name: $default_name\n"
+        send "\r"
+    }
+    timeout { exit 1 }
+}
+
+# 6. Imaging Engine Selection: Select Clonezilla Native (1)
+expect {
+    "Select imaging engine" {
+        send_user "\nPASS: Imaging engine selection prompt reached.\n"
+        send "1\r"
+    }
+    timeout { exit 1 }
+}
+
+# 7. Hardware Rescue Mode: Select Rescue Mode (2)
+expect {
+    "Bad Sector & Hardware Rescue Handling" {
+        send_user "\nPASS: Rescue Mode prompt 5-5 reached.\n"
+        send "2\r"
+    }
+    timeout { exit 1 }
+}
+
+expect {
+    "Rescue Mode enabled: '--rescue' flag will be passed" {
+        send_user "\nPASS: Verified '--rescue' flag activation message.\n"
+    }
+    timeout { exit 1 }
+}
+
+# 8. Pre-Flight Configuration Summary
+expect {
+    "Pre-Flight Configuration Summary" {
+        send_user "\nPASS: Pre-Flight summary reached.\n"
+    }
+    timeout { exit 1 }
+}
+
+# 9. Non-Destructive Abort: Test empty Enter rejection, then send 'n'
+expect {
+    "Start backup operation now? (y/n):" {
+        send_user "\nINFO: Pre-flight confirmation prompt reached. Testing empty Enter...\n"
+        send "\r"
+    }
+    timeout { exit 1 }
+}
+
+expect {
+    "Empty response (Return key) is not accepted" {
+        send_user "\nPASS: Branch verified: Empty Return key rejected on confirmation.\n"
+        send "n\r"
+    }
+    timeout { exit 1 }
+}
+
+expect {
+    "Backup aborted by user" {
+        send_user "\nPASS: Verified clean, non-destructive early abort.\n"
+    }
+    timeout { exit 1 }
+}
+
+expect eof
+send_user "\n=== TEST_COMPLETED_SUCCESSFULLY ===\n"
+exit 0

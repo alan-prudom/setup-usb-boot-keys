@@ -1,0 +1,92 @@
+#!/usr/bin/expect -f
+# ==============================================================================
+# test_backup_cli_all_and_custom.exp
+# Exercises:
+#   1. Target drive: [1] /dev/sda
+#   2. Partition scope: [3] Custom selection
+#   3. Empty partition string rejection loop
+#   4. Custom partition input: "sda2"
+#   5. Dynamic naming verification: HP-EliteBook-8470p-sda2-<timestamp>-img
+#   6. Pre-flight abort
+# ==============================================================================
+
+set timeout 20
+set script_path [lindex $argv 0]
+if {"$script_path" == ""} {
+    set script_path "/home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/run_rescuezilla_backup_cli.sh"
+}
+
+send_user "\n=== TEST_CASE: Backup CLI - Custom Partition Input & Validation ===\n"
+
+spawn bash "$script_path"
+
+expect {
+    "Select drive to backup" { send "1\r" }
+    timeout { exit 1 }
+}
+
+# Select Scope Option 3 (Custom)
+expect {
+    "Select partition scope" {
+        send_user "\nINFO: Selecting Option 3 (Custom selection)...\n"
+        send "3\r"
+    }
+    timeout { exit 1 }
+}
+
+# Test empty partition list rejection
+expect {
+    "Enter partition names separated by space" {
+        send_user "\nINFO: Testing empty partition input rejection...\n"
+        send "\r"
+    }
+    timeout { exit 1 }
+}
+
+expect {
+    "Partition list cannot be empty" {
+        send_user "\nPASS: Branch verified: Empty partition string rejected.\n"
+        # Enter valid single partition
+        send "sda2\r"
+    }
+    timeout { exit 1 }
+}
+
+# Verify dynamic name contains sda2
+expect {
+    -re "Enter image folder name .*default: '(HP-EliteBook-8470p-sda2-\[^'\]+)'" {
+        set default_name $expect_out(1,string)
+        send_user "\nPASS: Verified Custom Scope Dynamic Name: $default_name\n"
+        send "\r"
+    }
+    timeout { exit 1 }
+}
+
+# Engine: Clonezilla (1)
+expect {
+    "Select imaging engine" { send "1\r" }
+    timeout { exit 1 }
+}
+
+# Rescue Mode: Standard (1)
+expect {
+    "Select Rescue Mode" { send "1\r" }
+    timeout { exit 1 }
+}
+
+# Summary and abort
+expect {
+    "Start backup operation now? (y/n):" { send "n\r" }
+    timeout { exit 1 }
+}
+
+expect {
+    "Backup aborted by user" {
+        send_user "\nPASS: Verified clean abort.\n"
+    }
+    timeout { exit 1 }
+}
+
+expect eof
+send_user "\n=== TEST_CASE COMPLETED SUCCESSFULLY ===\n"
+exit 0
