@@ -1,1 +1,4 @@
 chats.md
+# Ignore test HTML and raw media assets
+Ventoy/tests/results/
+*.png
