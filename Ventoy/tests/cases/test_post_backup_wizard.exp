@@ -1,0 +1,61 @@
+#!/usr/bin/expect -f
+# ==============================================================================
+# test_post_backup_wizard.exp
+# Exercises post-backup-wizard.sh:
+#   1. Feed simulated bad-sector rescue telemetry log
+#   2. Assert Operational Assessment Header
+#   3. Select Menu Option 1 (Inspect Error Summary & Root Cause)
+#   4. Select Menu Option 8 (Exit Wizard to Shell)
+# ==============================================================================
+
+set timeout 15
+set script_path "/home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/post-backup-wizard.sh"
+set sample_log "/home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/telemetry/sda2_partclone_bad_sector_error_2026-09-06.log"
+
+send_user "\n=== TEST_CASE: Post-Backup Wizard Telemetry Triage & Rescue Banner ===\n"
+
+spawn bash "$script_path" "$sample_log" --no-pause
+
+# 1. Assert Wizard Header
+expect {
+    "POST-BACKUP DIAGNOSTIC & LOG EXTRACTION WIZARD" {
+        send_user "\nPASS: Verified Post-Backup Wizard Header Banner\n"
+    }
+    timeout { exit 1 }
+}
+
+# 2. Wizard Menu: Select Option 1 (Inspect Error Summary)
+expect {
+    "Select an action" {
+        send_user "\nINFO: Selecting Option 1 (Inspect Error Summary & Diagnostic Root Cause)...\n"
+        send "1\r"
+    }
+    timeout { exit 1 }
+}
+
+expect {
+    "Recent Error & Warning Snippets:" {
+        send_user "\nPASS: Verified Error & Warning snippets display.\n"
+    }
+    timeout { exit 1 }
+}
+
+# 3. Exit Wizard: Select Option 8
+expect {
+    "Select an action" {
+        send_user "\nINFO: Selecting Option 8 (Exit Wizard)...\n"
+        send "8\r"
+    }
+    timeout { exit 1 }
+}
+
+expect {
+    "Exiting wizard" {
+        send_user "\nPASS: Verified clean exit from Post-Backup Wizard.\n"
+    }
+    timeout { exit 1 }
+}
+
+expect eof
+send_user "\n=== TEST_CASE COMPLETED SUCCESSFULLY ===\n"
+exit 0

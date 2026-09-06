@@ -44,7 +44,7 @@ KEY_FILE="${SCRIPT_DIR}/id_rsa"
 
 # Locate SSH Key
 if [ ! -f "$KEY_FILE" ]; then
-    for candidate in "/scripts/id_rsa" "/home/ubuntu/.ssh/id_rsa" "/home/ubuntu/scripts/id_rsa" "${SCRIPT_DIR}/id_rsa"; do
+    for candidate in "/scripts/id_rsa" "/home/alan/.ssh/id_rsa" "/home/ubuntu/.ssh/id_rsa" "/home/ubuntu/scripts/id_rsa" "${SCRIPT_DIR}/id_rsa"; do
         if [ -f "$candidate" ]; then
             KEY_FILE="$candidate"
             break
@@ -53,7 +53,7 @@ if [ ! -f "$KEY_FILE" ]; then
 fi
 
 if [ ! -f "$KEY_FILE" ]; then
-    KEY_FILE=$(find /media /mnt /home -name "id_rsa" 2>/dev/null | head -n 1)
+    KEY_FILE=$(find /media/devmon /media/ubuntu /home/ubuntu -maxdepth 3 -name "id_rsa" 2>/dev/null | head -n 1 || echo "")
 fi
 
 # POSIX Input Validation Helpers

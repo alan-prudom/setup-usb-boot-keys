@@ -1,0 +1,49 @@
+#!/usr/bin/expect -f
+# ==============================================================================
+# test_rescue_suite_launcher.exp
+# ==============================================================================
+
+set timeout 15
+set script_path "/home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/rescue_suite_launcher.sh"
+
+send_user "\n=== TEST_CASE: Rescue Suite Launcher Menu & Validation ===\n"
+
+spawn bash "$script_path"
+
+# 1. Assert Launcher Selection Prompt directly
+expect {
+    -re "Enter your selection.*:" {
+        send_user "\nPASS: Verified Rescue Suite Menu and Prompt.\n"
+        # Test empty enter
+        send "\r"
+    }
+    timeout { exit 1 }
+}
+
+expect {
+    "Empty input" {
+        send_user "\nPASS: Empty Enter rejected in launcher.\n"
+        send "99\r"
+    }
+    timeout { exit 1 }
+}
+
+expect {
+    "Invalid option" {
+        send_user "\nPASS: Out-of-bounds choice '99' rejected.\n"
+        send "0\r"
+    }
+    timeout { exit 1 }
+}
+
+# 3. Clean exit assertion
+expect {
+    "Exiting rescue suite" {
+        send_user "\nPASS: Clean exit from Rescue Suite verified.\n"
+    }
+    timeout { exit 1 }
+}
+
+expect eof
+send_user "\n=== TEST_CASE COMPLETED SUCCESSFULLY ===\n"
+exit 0
