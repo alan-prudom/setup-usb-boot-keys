@@ -101,11 +101,14 @@ if [ -n "$LOG_FILE" ] && [ -f "$LOG_FILE" ]; then
         | wc -l || true)
 
     warning_count=$(grep -iE "warning|retry|bad sector" "$LOG_FILE" 2>/dev/null | wc -l || true)
+    rescue_bad_blocks=$(grep -iE "Can't read sector at|lost data|unreadable sector" "$LOG_FILE" 2>/dev/null | wc -l || true)
 
     # Check Clonezilla and Rescuezilla completion markers
     if grep -iE "Ending /usr/sbin/ocs-sr|End of saveparts job|End of savedisk job|Finished!|backup completed successfully|restore completed successfully|clone completed successfully|successfully saved|completed with 0 errors" "$LOG_FILE" >/dev/null 2>&1; then
-        if [ "$error_count" -eq 0 ]; then
+        if [ "$error_count" -eq 0 ] && [ "$rescue_bad_blocks" -eq 0 ]; then
             status_type="SUCCESS"
+        elif [ "$rescue_bad_blocks" -gt 0 ]; then
+            status_type="RESCUE_SUCCESS"
         else
             status_type="SUCCESS_WITH_WARNINGS"
         fi
@@ -128,6 +131,11 @@ case "$status_type" in
         echo -e "  ${GREEN}██████████████████████████████████████████████████████████████${RESET}"
         echo -e "  ${GREEN}█  🟢 STATUS: BACKUP COMPLETED SUCCESSFULLY (Zero Errors)     █${RESET}"
         echo -e "  ${GREEN}██████████████████████████████████████████████████████████████${RESET}"
+        ;;
+    "RESCUE_SUCCESS")
+        echo -e "  ${YELLOW}██████████████████████████████████████████████████████████████${RESET}"
+        echo -e "  ${YELLOW}█  🟡 STATUS: RESCUE BACKUP COMPLETED (${rescue_bad_blocks} Bad Sectors Zeroed) █${RESET}"
+        echo -e "  ${YELLOW}██████████████████████████████████████████████████████████████${RESET}"
         ;;
     "SUCCESS_WITH_WARNINGS")
         echo -e "  ${YELLOW}██████████████████████████████████████████████████████████████${RESET}"
@@ -284,7 +292,9 @@ while true; do
     esac
 done
 
-echo ""
-read -n 1 -s -r -p "Wizard closed. Press any key to close this terminal..."
-echo ""
+if [[ "${1:-}" != *"--no-pause"* ]] && [[ "${2:-}" != *"--no-pause"* ]]; then
+    echo ""
+    read -n 1 -s -r -p "Wizard closed. Press any key to close this terminal..."
+    echo ""
+fi
 

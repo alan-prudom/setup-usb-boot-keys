@@ -297,7 +297,7 @@ fi
 echo -e "\n${DIM}  ℹ️  Why we ask this: The Post-Backup Wizard automatically validates image integrity and analyzes logs for bad sectors or network errors.${RESET}"
 if prompt_yes_no "Run the Post-Backup Diagnostic Wizard now? (y/n): "; then
     if [ -f "${SCRIPT_DIR}/post-backup-wizard.sh" ]; then
-        bash "${SCRIPT_DIR}/post-backup-wizard.sh" "$LOG_FILE"
+        bash "${SCRIPT_DIR}/post-backup-wizard.sh" "$LOG_FILE" --no-pause
     fi
 fi
 

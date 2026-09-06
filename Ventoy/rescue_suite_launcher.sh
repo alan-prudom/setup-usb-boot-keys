@@ -159,9 +159,9 @@ while true; do
     echo -e "----------------------------------------------------------------------"
     echo -e "  ${BOLD}Storage & Diagnostic Utilities:${RESET}"
     echo -e "  ${CYAN}[6]${RESET} 🌐 ${BOLD}Connect Network Storage${RESET} (Mount home40/Clonezilla share via SSHFS)"
-    echo -e "  ${CYAN}[7]${RESET} 💾 ${BOLD}Mount Local Storage${RESET}     (Mount SHARED FAT and Internal HDD ro)"
+    echo -e "  ${CYAN}[7]${RESET} 💾 ${BOLD}Mount Local Storage${RESET}     (Mount USB Data Partition and Internal HDD ro)"
     echo -e "  ${CYAN}[8]${RESET} 📋 ${BOLD}Post-Backup Wizard${RESET}      (Examine backup manifests & disk health)"
-    echo -e "  ${CYAN}[9]${RESET} 📦 ${BOLD}Export Diagnostic Bundle${RESET} (Harvest logs, serial & telemetry to SHARED FAT)"
+    echo -e "  ${CYAN}[9]${RESET} 📦 ${BOLD}Export Diagnostic Bundle${RESET} (Harvest logs, telemetry & SMART to USB Data Partition)"
     echo -e "  ${CYAN}[10]${RESET} 🖥️  ${BOLD}Launch Rescuezilla GUI${RESET}  (Native Rescuezilla graphical window)"
     echo -e "  ${CYAN}[0]${RESET} 🚪 Exit"
     echo -e "${CYAN}======================================================================${RESET}"
@@ -292,13 +292,15 @@ while true; do
             ;;
         7)
             # Mount Local Storage
-            echo -e "\n${BOLD}>>> Mounting Local USB FAT & Internal HDD (ro)...${RESET}"
+            echo -e "\n${BOLD}>>> Mounting Local USB Data Partition & Internal Disks (ro)...${RESET}"
             if [ -x /usr/local/bin/mount_storage_startup.sh ]; then
                 sudo /usr/local/bin/mount_storage_startup.sh
             elif [ -x "${SCRIPT_DIR}/mount_fat_and_hdd.sh" ]; then
                 sudo "${SCRIPT_DIR}/mount_fat_and_hdd.sh"
+            elif [ -x "${SCRIPT_DIR}/persistence_startup/mount_storage_startup.sh" ]; then
+                sudo "${SCRIPT_DIR}/persistence_startup/mount_storage_startup.sh"
             else
-                echo -e "${RED}Mount helper script not found.${RESET}"
+                remount_local_storage
             fi
             ;;
         8)
@@ -315,14 +317,20 @@ while true; do
         9)
             # Export Diagnostic Bundle
             echo -e "\n${BOLD}>>> Harvesting and Exporting Diagnostic Bundle...${RESET}"
-            if [ -x /usr/local/bin/export_vm_and_system_logs_to_fat.sh ]; then
+            if [ -x "${SCRIPT_DIR}/export_diagnostic_bundle.sh" ]; then
+                bash "${SCRIPT_DIR}/export_diagnostic_bundle.sh"
+            elif [ -x "/scripts/export_diagnostic_bundle.sh" ]; then
+                bash "/scripts/export_diagnostic_bundle.sh"
+            elif [ -x /usr/local/bin/export_vm_and_system_logs_to_fat.sh ]; then
                 sudo /usr/local/bin/export_vm_and_system_logs_to_fat.sh
             elif [ -x "${SCRIPT_DIR}/export_vm_and_system_logs_to_fat.sh" ]; then
                 sudo "${SCRIPT_DIR}/export_vm_and_system_logs_to_fat.sh"
             elif [ -x "/scripts/export_vm_and_system_logs_to_fat.sh" ]; then
                 sudo "/scripts/export_vm_and_system_logs_to_fat.sh"
+            elif [ -f "${SCRIPT_DIR}/post-backup-wizard.sh" ]; then
+                bash "${SCRIPT_DIR}/post-backup-wizard.sh" --bundle-only
             else
-                echo -e "${RED}export_vm_and_system_logs_to_fat.sh not found.${RESET}"
+                echo -e "${RED}Export tool not found.${RESET}"
             fi
             ;;
         10)
