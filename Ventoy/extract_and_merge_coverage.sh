@@ -48,7 +48,9 @@ if [ -z "$SOURCE_FOUND" ]; then
         scp -r -i /home/alan/.ssh/id_rsa -P 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             "ubuntu@127.0.0.1:/media/ubuntu/2C95D29B2DF0500E/live_coverage/*" "$LIVE_EXTRACT_DIR/" 2>/dev/null || \
         scp -r -i /home/alan/.ssh/id_rsa -P 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-            "ubuntu@127.0.0.1:/home/ubuntu/ntfs_usb/live_coverage/*" "$LIVE_EXTRACT_DIR/" 2>/dev/null || true
+            "ubuntu@127.0.0.1:/home/ubuntu/ntfs_usb/live_coverage/*" "$LIVE_EXTRACT_DIR/" 2>/dev/null || \
+        scp -r -i /home/alan/.ssh/id_rsa -P 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            "ubuntu@127.0.0.1:/tmp/live_coverage/*" "$LIVE_EXTRACT_DIR/" 2>/dev/null || true
         SOURCE_FOUND="vm:ssh"
     fi
 fi
