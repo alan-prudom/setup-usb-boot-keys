@@ -198,7 +198,7 @@ main_menu() {
         echo -e "  ${CYAN}[1]${RESET} 🖥️  Launch QEMU Test VM (Interactive Selection: Option A or B)"
         echo -e "  ${CYAN}[2]${RESET} ⚡ Fast-Launch Option B Direct Persistence VM (with GTK display)"
         echo -e "\n${BOLD}Testing & Coverage Pipeline:${RESET}"
-        echo -e "  ${CYAN}[3]${RESET} 🧪 Run Master Cumulative Automated Expect Suite (6 Test Cases)"
+        echo -e "  ${CYAN}[3]${RESET} 🧪 Run Master Cumulative Automated Expect Suite (8 Test Cases)"
         echo -e "  ${CYAN}[4]${RESET} 📥 Extract Live Coverage & Transcripts from Partition 4 / VM"
         echo -e "  ${CYAN}[5]${RESET} 📊 Coverage & Artifact Explorer (Submenu: HTML, Transcripts, Staleness)"
         echo -e "\n${BOLD}USB Deployment & Maintenance:${RESET}"
@@ -223,7 +223,8 @@ main_menu() {
                 ;;
             3)
                 echo -e "\n[*] Executing Full Cumulative Automated Test Suite..."
-                bash "${SCRIPT_DIR}/tests/harness/run_cumulative_suite.sh" "/tmp/cumulative_all_scripts"
+                local user_out_dir="/tmp/cumulative_${USER:-alan}_tests"
+                bash "${SCRIPT_DIR}/tests/harness/run_cumulative_suite.sh" "$user_out_dir"
                 read -rp "Press Enter to return to menu..." _
                 ;;
             4)
