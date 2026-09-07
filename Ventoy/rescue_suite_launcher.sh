@@ -174,12 +174,25 @@ while true; do
             # Backup
             echo -e "\n${BOLD}>>> Launching Backup Assistant...${RESET}"
             ensure_network_mount || true
-            if [ -f "${SCRIPT_DIR}/run_rescuezilla_backup_cli.sh" ]; then
-                bash "${SCRIPT_DIR}/run_rescuezilla_backup_cli.sh"
-            elif [ -f "/scripts/run_rescuezilla_backup_cli.sh" ]; then
-                bash "/scripts/run_rescuezilla_backup_cli.sh"
+            BACKUP_SCRIPT=""
+            for cand in \
+                "${SCRIPT_DIR}/run_rescuezilla_backup_cli.sh" \
+                "/media/ubuntu/ntfs_usb/run_rescuezilla_backup_cli.sh" \
+                "/home/ubuntu/ntfs_usb/run_rescuezilla_backup_cli.sh" \
+                "/media/ubuntu/2C95D29B2DF0500E/run_rescuezilla_backup_cli.sh" \
+                "/media/devmon/Ventoy/run_rescuezilla_backup_cli.sh" \
+                "/media/devmon/sdb4-usb-Generic-_SD_MMC_/run_rescuezilla_backup_cli.sh" \
+                "/scripts/run_rescuezilla_backup_cli.sh"; do
+                if [ -r "$cand" ] && head -n 1 "$cand" | grep -q "bash"; then
+                    BACKUP_SCRIPT="$cand"
+                    break
+                fi
+            done
+            if [ -n "$BACKUP_SCRIPT" ]; then
+                echo -e "  ${GREEN}✓ Executing:${RESET} $BACKUP_SCRIPT"
+                bash "$BACKUP_SCRIPT"
             else
-                echo -e "${YELLOW}Falling back to Clonezilla ocs-sr wizard...${RESET}"
+                echo -e "${YELLOW}Notice: Direct CLI backup script not found or unreadable. Launching Clonezilla ocs-sr wizard...${RESET}"
                 sudo ocs-sr -x || sudo rescuezilla
             fi
             ;;
