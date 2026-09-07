@@ -260,17 +260,23 @@ case "$stor_choice" in
 esac
 
 # Configure Display
-# Auto-detect host display & authority
 HOST_USER="${SUDO_USER:-$USER}"
 HOST_UID=$(id -u "$HOST_USER" 2>/dev/null || echo "1000")
-if [ -z "$DISPLAY" ]; then
-    export DISPLAY=":0"
-fi
-if [ -z "$XAUTHORITY" ]; then
+
+# Ensure DISPLAY is set
+export DISPLAY="${DISPLAY:-:0}"
+
+# Auto-detect Xauthority for Wayland / X11
+if [ -z "${XAUTHORITY:-}" ] || [ ! -f "$XAUTHORITY" ]; then
     AUTH_CAND=$(ls /run/user/"$HOST_UID"/.mutter-Xwaylandauth.* /run/user/"$HOST_UID"/gdm/Xauthority /home/"$HOST_USER"/.Xauthority 2>/dev/null | head -n 1)
-    if [ -n "$AUTH_CAND" ]; then
+    if [ -n "$AUTH_CAND" ] && [ -f "$AUTH_CAND" ]; then
         export XAUTHORITY="$AUTH_CAND"
     fi
+fi
+
+# Authorize root on host display if run via sudo
+if [ -n "$SUDO_USER" ]; then
+    sudo -u "$SUDO_USER" DISPLAY="$DISPLAY" xhost +si:localuser:root >/dev/null 2>&1 || true
 fi
 
 if [ "$disp_choice" = "1" ]; then
@@ -284,7 +290,12 @@ if [ "$disp_choice" = "1" ]; then
     echo -e "  • Serial Log: ${VM_SERIAL_LOG}"
     echo -e "  • QEMU Log:   ${VM_QEMU_LOG}"
     echo -e "${GREEN}======================================================================${RESET}"
-    qemu-system-x86_64 "${QEMU_ARGS[@]}" 2>>"$VM_QEMU_LOG"
+    if ! qemu-system-x86_64 "${QEMU_ARGS[@]}" 2>>"$VM_QEMU_LOG"; then
+        echo -e "${RED}✗ Error: QEMU terminated with an error.${RESET}"
+        echo -e "${YELLOW}--- QEMU Log (/tmp/qemu_rescuezilla_vm.log) ---${RESET}"
+        cat "$VM_QEMU_LOG"
+        echo -e "${YELLOW}-----------------------------------------------${RESET}"
+    fi
 else
     echo -e "\n[+] Launching QEMU with TigerVNC Server on localhost:${VNC_PORT}..."
     QEMU_ARGS+=(
