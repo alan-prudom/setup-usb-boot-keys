@@ -2,7 +2,8 @@
 # ==============================================================================
 # extract_and_merge_coverage.sh
 # Finds, extracts, and merges live coverage data & terminal transcripts
-# from Partition 4 (or a running Rescuezilla QEMU VM) with local test metrics.
+# from Partition 4 (or running Rescuezilla VM) with local cumulative metrics.
+# Supports the per-script folder structure with SHA256 staleness checking.
 # ==============================================================================
 set -euo pipefail
 
@@ -34,7 +35,7 @@ for cand_p4 in \
     if [ -d "$cand_p4" ] && [ -n "$(ls -A "$cand_p4" 2>/dev/null)" ]; then
         SOURCE_FOUND="dir:$cand_p4"
         echo -e "✓ Found local Partition 4 storage at: ${CYAN}${cand_p4}${RESET}"
-        cp -v "${cand_p4}"/* "$LIVE_EXTRACT_DIR/" 2>/dev/null || true
+        cp -ra "${cand_p4}"/* "$LIVE_EXTRACT_DIR/" 2>/dev/null || true
         break
     fi
 done
@@ -43,10 +44,10 @@ done
 if [ -z "$SOURCE_FOUND" ]; then
     if ssh -i /home/alan/.ssh/id_rsa -p 2222 -o ConnectTimeout=2 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@127.0.0.1 "true" 2>/dev/null; then
         echo -e "✓ Detected running Rescuezilla VM on SSH port 2222."
-        echo "  • Fetching coverage files from VM Partition 4 (/media/ubuntu/2C95D29B2DF0500E/live_coverage)..."
-        scp -i /home/alan/.ssh/id_rsa -P 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        echo "  • Fetching per-script coverage folders from VM Partition 4..."
+        scp -r -i /home/alan/.ssh/id_rsa -P 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             "ubuntu@127.0.0.1:/media/ubuntu/2C95D29B2DF0500E/live_coverage/*" "$LIVE_EXTRACT_DIR/" 2>/dev/null || \
-        scp -i /home/alan/.ssh/id_rsa -P 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        scp -r -i /home/alan/.ssh/id_rsa -P 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             "ubuntu@127.0.0.1:/home/ubuntu/ntfs_usb/live_coverage/*" "$LIVE_EXTRACT_DIR/" 2>/dev/null || true
         SOURCE_FOUND="vm:ssh"
     fi
@@ -57,15 +58,13 @@ if [ -z "$SOURCE_FOUND" ]; then
     echo "Checking if prior extractions exist in $LIVE_EXTRACT_DIR..."
 fi
 
-echo -e "\n[*] Extracted Files in: ${CYAN}${LIVE_EXTRACT_DIR}${RESET}"
-ls -lh "$LIVE_EXTRACT_DIR"
+echo -e "\n[*] Extracted Scripts / Artifacts in: ${CYAN}${LIVE_EXTRACT_DIR}${RESET}"
+find "$LIVE_EXTRACT_DIR" -maxdepth 2
 
-# 3. If coverage.info exists in extracted files, rebase guest paths to host paths
-if [ -f "${LIVE_EXTRACT_DIR}/coverage.info" ]; then
-    sed -i "s|/scripts/|${SCRIPT_DIR}/|g" "${LIVE_EXTRACT_DIR}/coverage.info"
-fi
+# 3. Locate all coverage.info files and re-base paths
+LCOV_ARGS=()
 
-# 4. Locate Base Cumulative Suite coverage.info
+# Find Base Cumulative Suite coverage.info
 BASE_INFO=""
 for cand_base in \
     "${TARGET_DIR}/cumulative_coverage.info" \
@@ -83,21 +82,33 @@ if [ -z "$BASE_INFO" ]; then
     BASE_INFO="/tmp/cumulative_all_scripts/coverage.info"
 fi
 
-# 5. Merge LCOV tracefiles
-echo -e "\n[*] Merging automated test coverage with live manual runs..."
-LCOV_ARGS=("-a" "$BASE_INFO")
-if [ -f "${LIVE_EXTRACT_DIR}/coverage.info" ]; then
-    LCOV_ARGS+=("-a" "${LIVE_EXTRACT_DIR}/coverage.info")
+if [ -f "$BASE_INFO" ]; then
+    LCOV_ARGS+=("-a" "$BASE_INFO")
 fi
 
-lcov --rc lcov_branch_coverage=1 "${LCOV_ARGS[@]}" -o "$MERGED_INFO"
+# Find all coverage.info files in per-script subdirectories or root
+while IFS= read -r cov_file; do
+    if [ -f "$cov_file" ]; then
+        sed -i "s|/scripts/|${SCRIPT_DIR}/|g" "$cov_file"
+        LCOV_ARGS+=("-a" "$cov_file")
+    fi
+done < <(find "$LIVE_EXTRACT_DIR" -type f -name "coverage.info")
+
+# 4. Merge LCOV tracefiles
+echo -e "\n[*] Merging automated test coverage with live manual runs..."
+if [ "${#LCOV_ARGS[@]}" -gt 0 ]; then
+    lcov --rc lcov_branch_coverage=1 "${LCOV_ARGS[@]}" -o "$MERGED_INFO"
+else
+    echo -e "${RED}Error: No coverage data found to merge.${RESET}"
+    exit 1
+fi
 
 echo -e "\n======================================================================"
 echo -e "${GREEN}✓ COVERAGE MERGE COMPLETE!${RESET}"
 echo "======================================================================"
 echo -e "  • Merged LCOV Data : ${CYAN}${MERGED_INFO}${RESET}"
 
-# 6. Generate Browsable HTML Report
+# 5. Generate Browsable HTML Report
 if command -v genhtml >/dev/null 2>&1; then
     mkdir -p "$MERGED_HTML"
     genhtml "$MERGED_INFO" \

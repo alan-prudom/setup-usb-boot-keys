@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=🎯 Live Rescue & Diagnostics Hub
+Comment=Master Menu for Rescuezilla CLI, Wizard, OBD & Coverage
+Exec=xfce4-terminal --title="🎯 Live Rescue & Diagnostics Hub" --geometry=110x35 -e "bash /scripts/live_rescue_hub.sh"
+Icon=utilities-terminal
+Terminal=false
+StartupNotify=true

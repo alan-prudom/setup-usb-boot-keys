@@ -78,12 +78,13 @@ for TDIR in "${TARGET_DIRS[@]}"; do
         "run_rescuezilla_backup_cli.sh" \
         "post-backup-wizard.sh" \
         "sda_rescue_backup.sh" \
-        "sda5_rescue_backup.sh" \
         "mount_home40_backup.sh" \
         "mount_fat_and_hdd.sh" \
         "export_vm_and_system_logs_to_fat.sh" \
         "export_diagnostic_bundle.sh" \
+        "obd_preflight_check.sh" \
         "run_with_coverage.sh" \
+        "live_rescue_hub.sh" \
         "rescue_suite_launcher.sh"; do
         if [ -f "${SCRIPT_DIR}/${script_file}" ]; then
             cp "${SCRIPT_DIR}/${script_file}" "$TDIR/scripts/"

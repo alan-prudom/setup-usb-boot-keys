@@ -3,39 +3,53 @@
 # run_with_coverage.sh
 # Live USB Manual Testing Instrumentation Wrapper
 # Designed to run in Rescuezilla Live / Ubuntu to record user sessions,
-# capture line & branch coverage, and output browsable lcov HTML reports.
+# capture line & branch coverage, record SHA256 source fingerprints for
+# staleness detection, and store data in one folder per original script.
 # ==============================================================================
 set -euo pipefail
 
 TARGET_SCRIPT="${1:-/scripts/run_rescuezilla_backup_cli.sh}"
 
-# Detect output directory on persistent partition or fallback to /tmp
-OUT_DIR=""
+if [ ! -f "$TARGET_SCRIPT" ]; then
+    echo "Error: Target script not found at '$TARGET_SCRIPT'" >&2
+    exit 1
+fi
+
+SCRIPT_NAME=$(basename "$TARGET_SCRIPT" .sh)
+SRC_REALPATH=$(realpath "$TARGET_SCRIPT")
+SRC_SHA256=$(sha256sum "$SRC_REALPATH" | awk '{print $1}')
+SRC_MTIME=$(stat -c %Y "$SRC_REALPATH" 2>/dev/null || echo "0")
+SRC_LINES=$(wc -l < "$SRC_REALPATH" 2>/dev/null || echo "0")
+
+# Detect base output directory on persistent partition or fallback to /tmp
+BASE_DIR=""
 for cand in "/home/ubuntu/ntfs_usb/live_coverage" "/media/ubuntu/2C95D29B2DF0500E/live_coverage" "/media/ubuntu/SHARED_FAT/live_coverage" "/tmp/live_coverage"; do
     parent=$(dirname "$cand")
     if [ -d "$parent" ] && [ -w "$parent" ]; then
-        OUT_DIR="$cand"
+        BASE_DIR="$cand"
         break
     fi
 done
 
-OUT_DIR="${OUT_DIR:-/tmp/live_coverage}"
-mkdir -p "$OUT_DIR"
+BASE_DIR="${BASE_DIR:-/tmp/live_coverage}"
+SCRIPT_DIR="${BASE_DIR}/${SCRIPT_NAME}"
+mkdir -p "$SCRIPT_DIR"
 
-TIMESTAMP=$(date '+%Y%m%d_%H%M%S')
-TRACE_LOG="${OUT_DIR}/trace_${TIMESTAMP}.log"
-RAW_LOG="${OUT_DIR}/terminal_raw_${TIMESTAMP}.log"
-CLEAN_LOG="${OUT_DIR}/terminal_clean_${TIMESTAMP}.txt"
+TRACE_LOG="${SCRIPT_DIR}/trace.log"
+RAW_LOG="${SCRIPT_DIR}/session_transcript_raw.log"
+CLEAN_LOG="${SCRIPT_DIR}/session_transcript_clean.txt"
+META_FILE="${SCRIPT_DIR}/metadata.env"
 
 touch "$TRACE_LOG" "$RAW_LOG"
-chmod 666 "$TRACE_LOG" "$RAW_LOG"
+chmod 666 "$TRACE_LOG" "$RAW_LOG" 2>/dev/null || true
 
 echo "======================================================================"
 echo "    🛡️ RESCUEZILLA LIVE MANUAL TEST & COVERAGE INSTRUMENTATION        "
 echo "======================================================================"
 echo "  • Target Script     : ${TARGET_SCRIPT}"
-echo "  • Coverage Output   : ${OUT_DIR}"
-echo "  • Raw Terminal Log  : ${RAW_LOG}"
+echo "  • Script Checksum   : ${SRC_SHA256:0:16}..."
+echo "  • Script Output Dir : ${SCRIPT_DIR}"
+echo "  • Transcript Target : ${CLEAN_LOG}"
 echo "======================================================================"
 echo -e "\nStarting session. Everything you type and see will be recorded.\n"
 sleep 1
@@ -62,10 +76,22 @@ script -q -c "bash '$TARGET_SCRIPT'" "$RAW_LOG" || true
 # Strip ANSI codes for clean human-readable review
 sed -E 's/\x1B\[[0-9;]*[a-zA-Z]//g; s/\r//g' "$RAW_LOG" > "$CLEAN_LOG"
 
+# Record/Update Metadata fingerprint
+cat << META_EOF > "$META_FILE"
+SCRIPT_NAME="${SCRIPT_NAME}"
+SCRIPT_PATH="${SRC_REALPATH}"
+SCRIPT_SHA256="${SRC_SHA256}"
+SCRIPT_MTIME="${SRC_MTIME}"
+SCRIPT_LINES="${SRC_LINES}"
+LAST_RUN_DATE="$(date '+%Y-%m-%d %H:%M:%S')"
+META_EOF
+
 echo -e "\n======================================================================"
 echo "✓ Interactive Session Finished!"
-echo "  • Transcript (Clean Text) : ${CLEAN_LOG}"
-echo "  • Transcript (Raw Log)    : ${RAW_LOG}"
+echo "  • Clean Transcript  : ${CLEAN_LOG}"
+echo "  • Raw Terminal Log  : ${RAW_LOG}"
+echo "  • Trace Log File    : ${TRACE_LOG}"
+echo "  • Script Metadata   : ${META_FILE}"
 
 # Compute coverage immediately using python3 or uv
 PYTHON_BIN=""
@@ -84,7 +110,7 @@ import re
 import os
 
 trace_path = "$TRACE_LOG"
-out_dir = "$OUT_DIR"
+out_dir = "$SCRIPT_DIR"
 file_lines = {}
 file_branches = {}
 
@@ -162,9 +188,9 @@ with open(lcov_path, "w") as out:
 print(f"  • LCOV File Generated     : {lcov_path}")
 PY_EOF
 
-    if command -v genhtml >/dev/null 2>&1 && [ -f "${OUT_DIR}/coverage.info" ]; then
-        genhtml "${OUT_DIR}/coverage.info" -o "${OUT_DIR}/html" --branch-coverage --title "Live Manual Coverage" --legend || true
-        echo "  • Browsable HTML Report   : ${OUT_DIR}/html/index.html"
+    if command -v genhtml >/dev/null 2>&1 && [ -f "${SCRIPT_DIR}/coverage.info" ]; then
+        genhtml "${SCRIPT_DIR}/coverage.info" -o "${SCRIPT_DIR}/html" --branch-coverage --title "Live Manual Coverage: ${SCRIPT_NAME}" --legend || true
+        echo "  • Browsable HTML Report   : ${SCRIPT_DIR}/html/index.html"
     fi
 fi
 echo "======================================================================"
