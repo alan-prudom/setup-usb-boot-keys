@@ -99,7 +99,14 @@ while IFS= read -r cov_file; do
     fi
 done < <(find "$LIVE_EXTRACT_DIR" -type f -name "coverage.info")
 
-# 4. Merge LCOV tracefiles
+# 4. Canonicalize paths and Merge LCOV tracefiles
+CANON_DIR="$(realpath "$SCRIPT_DIR")"
+for arg_file in "${LCOV_ARGS[@]}"; do
+    if [ "$arg_file" != "-a" ] && [ -f "$arg_file" ]; then
+        sed -i "s|${SCRIPT_DIR}/|${CANON_DIR}/|g; s|/scripts/|${CANON_DIR}/|g" "$arg_file"
+    fi
+done
+
 echo -e "\n[*] Merging automated test coverage with live manual runs..."
 if [ "${#LCOV_ARGS[@]}" -gt 0 ]; then
     lcov --rc lcov_branch_coverage=1 "${LCOV_ARGS[@]}" -o "$MERGED_INFO"
@@ -119,6 +126,7 @@ if command -v genhtml >/dev/null 2>&1; then
     genhtml "$MERGED_INFO" \
         --output-directory "$MERGED_HTML" \
         --branch-coverage \
+        --prefix "$CANON_DIR" \
         --title "Combined Rescuezilla Automated & Live Test Coverage" \
         --legend \
         --show-details >/dev/null 2>&1 || true
