@@ -371,6 +371,15 @@ else
     echo -e "\n${RED}======================================================================${RESET}"
     echo -e "${RED}✗ Backup process finished with errors (Exit Code: ${BACKUP_EXIT_CODE})!${RESET}"
     echo -e "  • Check log file: ${BOLD}${LOG_FILE}${RESET}"
+
+    # Specific Triage for Partclone extfs bitmap free count mismatch
+    if grep -q "bitmap free count err" "$LOG_FILE" 2>/dev/null || grep -q "bitmap free count err" /var/log/partclone.log 2>/dev/null; then
+        echo -e "\n  ${YELLOW}🔍 Root Cause Identified: Partclone Filesystem Bitmap Inconsistency${RESET}"
+        echo -e "     ${DIM}Partclone detected uncommitted journal transactions or a dirty filesystem on ${TARGET_DRIVE}.${RESET}"
+        echo -e "     ${CYAN}Recommended Solutions:${RESET}"
+        echo -e "       1. Re-run this assistant and select ${BOLD}Rescue Mode [2] (--rescue)${RESET} to bypass bitmap errors."
+        echo -e "       2. Run ${BOLD}fsck -y <partition>${RESET} to repair filesystem metadata before backing up."
+    fi
     echo -e "${RED}======================================================================${RESET}"
 fi
 

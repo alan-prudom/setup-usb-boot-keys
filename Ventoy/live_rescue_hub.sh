@@ -67,6 +67,24 @@ prompt_choice() {
     done
 }
 
+# Helper to read/write instrumentation mode
+get_instrumentation_mode() {
+    if [ -f "/tmp/rescue_instrumentation.mode" ]; then
+        cat "/tmp/rescue_instrumentation.mode" 2>/dev/null || echo "0"
+    elif [ -f "$HOME/.config/rescue_instrumentation.mode" ]; then
+        cat "$HOME/.config/rescue_instrumentation.mode" 2>/dev/null || echo "0"
+    else
+        echo "0"
+    fi
+}
+
+set_instrumentation_mode() {
+    local val="$1"
+    echo "$val" > "/tmp/rescue_instrumentation.mode" 2>/dev/null || true
+    mkdir -p "$HOME/.config" 2>/dev/null || true
+    echo "$val" > "$HOME/.config/rescue_instrumentation.mode" 2>/dev/null || true
+}
+
 run_script_option() {
     local target_script="$1"
     local allow_instrumentation="${2:-1}"
@@ -77,18 +95,12 @@ run_script_option() {
         return
     fi
 
-    if [ "$allow_instrumentation" -eq 1 ]; then
-        echo -e "\n${BOLD}Execution Mode Selection:${RESET}"
-        echo -e "${DIM}  ℹ️  Why choose: Standard mode executes normally. Instrumented mode records full terminal I/O and tracks line/branch coverage into Partition 4.${RESET}"
-        echo -e "  ${CYAN}[1]${RESET} Standard Execution"
-        echo -e "  ${CYAN}[2]${RESET} Instrumented with Line & Branch Coverage (${GREEN}Recommended${RESET})"
-        local mode
-        mode=$(prompt_choice "Select mode [1-2]: " 1 2)
-        if [ "$mode" = "2" ]; then
-            sudo "${SCRIPTS_ROOT}/run_with_coverage.sh" "$target_script"
-        else
-            sudo bash "$target_script"
-        fi
+    local current_mode
+    current_mode=$(get_instrumentation_mode)
+
+    if [ "$allow_instrumentation" -eq 1 ] && [ "$current_mode" = "1" ]; then
+        echo -e "\n${CYAN}[*] Running with Line & Branch Instrumentation (${COV_BASE})...${RESET}"
+        sudo "${SCRIPTS_ROOT}/run_with_coverage.sh" "$target_script"
     else
         sudo bash "$target_script"
     fi
@@ -285,11 +297,21 @@ main_menu() {
     while true; do
         clear
         echo "======================================================================"
+        local imode
+        imode=$(get_instrumentation_mode)
+        local imode_label
+        if [ "$imode" = "1" ]; then
+            imode_label="${GREEN}🔬 ENABLED (Recording traces & transcripts)${RESET}"
+        else
+            imode_label="${DIM}⚡ DISABLED (Direct execution, no tracing)${RESET}"
+        fi
+
         echo -e "${BOLD}       🛡️ RESCUEZILLA LIVE GUEST RESCUE & DIAGNOSTICS HUB            ${RESET}"
         echo "======================================================================"
         echo "Environment    : Rescuezilla Live (Guest OS / RAM / Persistence)"
         echo "Scripts Root   : ${SCRIPTS_ROOT}"
         echo "Coverage Store : ${COV_BASE}"
+        echo -e "Mode           : ${imode_label}"
         echo "Timestamp      : $(date '+%Y-%m-%d %H:%M:%S')"
         echo "======================================================================"
         echo -e "\n${BOLD}Primary Operations:${RESET}"
@@ -301,13 +323,18 @@ main_menu() {
         echo -e "  ${CYAN}[5]${RESET} 🩺 On-Board Diagnostics (OBD) & Pre-Flight Check"
         echo -e "  ${CYAN}[6]${RESET} 🌐 Mount Remote Backup Destination (192.168.1.34:/home40)"
         echo -e "  ${CYAN}[7]${RESET} 📦 Export Diagnostic & Telemetry Bundle (to USB / network)"
-        echo -e "\n${BOLD}Coverage & Transcripts:${RESET}"
-        echo -e "  ${CYAN}[8]${RESET} 📊 Manage Traces, Text Transcripts & Staleness Submenu"
-        echo -e "\n  ${CYAN}[9]${RESET} 🚪 Exit to Shell"
+        echo -e "\n${BOLD}Instrumentation & Coverage Pipeline:${RESET}"
+        if [ "$imode" = "1" ]; then
+            echo -e "  ${CYAN}[8]${RESET} 🔬 Toggle Instrumentation Mode (Currently: ${GREEN}ON${RESET} -> Switch to ${YELLOW}OFF${RESET})"
+        else
+            echo -e "  ${CYAN}[8]${RESET} ⚡ Toggle Instrumentation Mode (Currently: ${DIM}OFF${RESET} -> Switch to ${GREEN}ON${RESET})"
+        fi
+        echo -e "  ${CYAN}[9]${RESET} 📊 Manage Traces, Text Transcripts & Staleness Submenu"
+        echo -e "\n  ${CYAN}[10]${RESET} 🚪 Exit to Shell"
         echo "======================================================================"
 
         local choice
-        choice=$(prompt_choice "Select task [1-9]: " 1 9)
+        choice=$(prompt_choice "Select task [1-10]: " 1 10)
 
         case "$choice" in
             1) run_script_option "${SCRIPTS_ROOT}/run_rescuezilla_backup_cli.sh" 1 ;;
@@ -317,8 +344,18 @@ main_menu() {
             5) run_script_option "${SCRIPTS_ROOT}/obd_preflight_check.sh" 0 ;;
             6) run_script_option "${SCRIPTS_ROOT}/mount_home40_backup.sh" 0 ;;
             7) run_script_option "${SCRIPTS_ROOT}/export_diagnostic_bundle.sh" 0 ;;
-            8) manage_coverage_submenu ;;
-            9)
+            8)
+                if [ "$imode" = "1" ]; then
+                    set_instrumentation_mode "0"
+                    echo -e "\n${YELLOW}Instrumentation Mode set to: DISABLED (Direct Execution)${RESET}"
+                else
+                    set_instrumentation_mode "1"
+                    echo -e "\n${GREEN}Instrumentation Mode set to: ENABLED (Recording to Partition 4 /tmp)${RESET}"
+                fi
+                sleep 1
+                ;;
+            9) manage_coverage_submenu ;;
+            10)
                 echo -e "\nExiting Rescue Hub. Goodbye!"
                 exit 0
                 ;;

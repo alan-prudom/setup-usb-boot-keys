@@ -22,10 +22,28 @@ fi
 TARGET_TO_RUN="${1:-/scripts/live_rescue_hub.sh}"
 shift || true
 
+# Check global instrumentation toggle
+INSTRUMENTED=0
+if [ -f "/tmp/rescue_instrumentation.mode" ]; then
+    INSTRUMENTED=$(cat "/tmp/rescue_instrumentation.mode" 2>/dev/null || echo "0")
+elif [ -f "$HOME/.config/rescue_instrumentation.mode" ]; then
+    INSTRUMENTED=$(cat "$HOME/.config/rescue_instrumentation.mode" 2>/dev/null || echo "0")
+fi
+
+RESOLVED_SCRIPT=""
 if [ -f "$TARGET_TO_RUN" ]; then
-    exec bash "$TARGET_TO_RUN" "$@"
+    RESOLVED_SCRIPT="$TARGET_TO_RUN"
 elif [ -f "/scripts/$(basename "$TARGET_TO_RUN")" ]; then
-    exec bash "/scripts/$(basename "$TARGET_TO_RUN")" "$@"
+    RESOLVED_SCRIPT="/scripts/$(basename "$TARGET_TO_RUN")"
+fi
+
+if [ -n "$RESOLVED_SCRIPT" ]; then
+    if [ "$INSTRUMENTED" = "1" ] && [ -x "/scripts/run_with_coverage.sh" ]; then
+        echo "[*] Launching with line & branch instrumentation..."
+        exec bash "/scripts/run_with_coverage.sh" "$RESOLVED_SCRIPT" "$@"
+    else
+        exec bash "$RESOLVED_SCRIPT" "$@"
+    fi
 else
     echo "Error: Target $TARGET_TO_RUN not found."
     read -rp "Press Enter..." _

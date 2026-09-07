@@ -210,34 +210,66 @@ manage_host_coverage_submenu() {
     done
 }
 
+get_instrumentation_mode() {
+    if [ -f "/tmp/rescue_instrumentation.mode" ]; then
+        cat "/tmp/rescue_instrumentation.mode" 2>/dev/null || echo "0"
+    elif [ -f "$HOME/.config/rescue_instrumentation.mode" ]; then
+        cat "$HOME/.config/rescue_instrumentation.mode" 2>/dev/null || echo "0"
+    else
+        echo "0"
+    fi
+}
+
+set_instrumentation_mode() {
+    local val="$1"
+    echo "$val" > "/tmp/rescue_instrumentation.mode" 2>/dev/null || true
+    mkdir -p "$HOME/.config" 2>/dev/null || true
+    echo "$val" > "$HOME/.config/rescue_instrumentation.mode" 2>/dev/null || true
+}
+
 # ------------------------------------------------------------------------------
 # Main Menu
 # ------------------------------------------------------------------------------
 main_menu() {
     while true; do
         clear
+        local imode
+        imode=$(get_instrumentation_mode)
+        local imode_label
+        if [ "$imode" = "1" ]; then
+            imode_label="${GREEN}🔬 ENABLED (Recording traces & transcripts)${RESET}"
+        else
+            imode_label="${DIM}⚡ DISABLED (Direct execution, no tracing)${RESET}"
+        fi
+
         echo "======================================================================"
         echo -e "${BOLD}       💻 RESCUEZILLA HOST SUPPORT & TEST ORCHESTRATOR               ${RESET}"
         echo "======================================================================"
         echo "Host Environment: Ubuntu Development System ($(uname -n))"
         echo "Repository Path : ${SCRIPT_DIR}"
+        echo -e "Mode            : ${imode_label}"
         echo "Timestamp       : $(date '+%Y-%m-%d %H:%M:%S')"
         echo "======================================================================"
         echo -e "\n${BOLD}Virtualization & Emulation:${RESET}"
         echo -e "  ${CYAN}[1]${RESET} 🖥️  Launch QEMU Test VM (Interactive Selection: Option A or B)"
         echo -e "  ${CYAN}[2]${RESET} ⚡ Fast-Launch Option B Direct Persistence VM (with GTK display)"
         echo -e "\n${BOLD}Testing & Coverage Pipeline:${RESET}"
-        echo -e "  ${CYAN}[3]${RESET} 🧪 Run Master Cumulative Automated Expect Suite (8 Test Cases)"
+        echo -e "  ${CYAN}[3]${RESET} 🧪 Run Master Cumulative Automated Expect Suite (9 Test Cases)"
         echo -e "  ${CYAN}[4]${RESET} 📥 Extract Live Coverage & Transcripts from Partition 4 / VM"
         echo -e "  ${CYAN}[5]${RESET} 📊 Coverage & Artifact Explorer (Submenu: HTML, Transcripts, Staleness)"
+        if [ "$imode" = "1" ]; then
+            echo -e "  ${CYAN}[6]${RESET} 🔬 Toggle Instrumentation Mode (Currently: ${GREEN}ON${RESET} -> Switch to ${YELLOW}OFF${RESET})"
+        else
+            echo -e "  ${CYAN}[6]${RESET} ⚡ Toggle Instrumentation Mode (Currently: ${DIM}OFF${RESET} -> Switch to ${GREEN}ON${RESET})"
+        fi
         echo -e "\n${BOLD}USB Deployment & Maintenance:${RESET}"
-        echo -e "  ${CYAN}[6]${RESET} 🚀 Deploy Four-Tier Redundancy & OpenSSH to Persistence Image"
-        echo -e "  ${CYAN}[7]${RESET} 🩺 Run Host OBD Pre-Flight Health Audit"
-        echo -e "\n  ${CYAN}[8]${RESET} 🚪 Exit"
+        echo -e "  ${CYAN}[7]${RESET} 🚀 Deploy Four-Tier Redundancy & OpenSSH to Persistence Image"
+        echo -e "  ${CYAN}[8]${RESET} 🩺 Run Host OBD Pre-Flight Health Audit"
+        echo -e "\n  ${CYAN}[9]${RESET} 🚪 Exit"
         echo "======================================================================"
 
         local choice
-        choice=$(prompt_choice "Select action [1-8]: " 1 8)
+        choice=$(prompt_choice "Select action [1-9]: " 1 9)
 
         case "$choice" in
             1)
@@ -265,16 +297,26 @@ main_menu() {
                 manage_host_coverage_submenu
                 ;;
             6)
+                if [ "$imode" = "1" ]; then
+                    set_instrumentation_mode "0"
+                    echo -e "\n${YELLOW}Instrumentation Mode set to: DISABLED (Direct Execution)${RESET}"
+                else
+                    set_instrumentation_mode "1"
+                    echo -e "\n${GREEN}Instrumentation Mode set to: ENABLED (Traces & Transcripts Active)${RESET}"
+                fi
+                sleep 1
+                ;;
+            7)
                 echo -e "\n[*] Deploying Four-Tier Redundancy & OpenSSH..."
                 sudo bash "${SCRIPT_DIR}/deploy_four_tier_persistence.sh"
                 read -rp "Press Enter to return to menu..." _
                 ;;
-            7)
+            8)
                 echo -e "\n[*] Running OBD Pre-Flight Check..."
                 bash "${SCRIPT_DIR}/obd_preflight_check.sh"
                 read -rp "Press Enter to return to menu..." _
                 ;;
-            8)
+            9)
                 echo -e "\nExiting Host Hub. Goodbye!"
                 exit 0
                 ;;
