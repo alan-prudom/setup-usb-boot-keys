@@ -4,6 +4,11 @@
 
 set -e
 
+# Ensure storage is mounted if not already present
+if [ ! -d /home/ubuntu/ntfs_usb ] && [ -x /usr/local/bin/mount_ntfs_startup.sh ]; then
+    sudo /usr/local/bin/mount_ntfs_startup.sh 2>/dev/null || true
+fi
+
 USB_TARGET=""
 for cand in /media/ubuntu/2C95D29B2DF0500E /media/ubuntu/ntfs_usb /home/ubuntu/ntfs_usb /media/devmon/Ventoy /media/devmon/sdb4*; do
     if [ -d "$cand" ] && [ -f "${cand}/run_rescuezilla_backup_cli.sh" ]; then

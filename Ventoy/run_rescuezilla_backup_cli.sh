@@ -134,12 +134,18 @@ echo -e "${DIM}  ℹ️  Why we ask this: Dynamically scans all physical and vir
 DISCOVERED_DRIVES=()
 while IFS= read -r dname; do
     if [ -n "$dname" ] && [ -b "/dev/${dname}" ]; then
+        # Exclude active persistence / live overlay block devices (e.g. casper-rw or backing /cow)
+        d_label=$(lsblk -lno LABEL "/dev/${dname}" 2>/dev/null | xargs || echo "")
+        d_mounts=$(lsblk -lno MOUNTPOINT "/dev/${dname}" 2>/dev/null || echo "")
+        if [ "$d_label" = "casper-rw" ] || echo "$d_mounts" | grep -qE "^/cow$"; then
+            continue
+        fi
         DISCOVERED_DRIVES+=("/dev/${dname}")
     fi
 done < <(lsblk -d -n -o NAME,TYPE 2>/dev/null | awk '$2=="disk" && $1 !~ /^(nbd|loop|ram|zram)/{print $1}')
 
 if [ "${#DISCOVERED_DRIVES[@]}" -eq 0 ]; then
-    echo -e "${RED}✗ Error: No disk block devices found on this system!${RESET}"
+    echo -e "${RED}✗ Error: No suitable source disk block devices found on this system (live persistence container excluded)!${RESET}"
     exit 1
 fi
 

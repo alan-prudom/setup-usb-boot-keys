@@ -1,0 +1,65 @@
+#!/usr/bin/expect -f
+# ==============================================================================
+# test_desktop_exec_validation.exp
+# REGRESSION TEST: Asserts that all desktop entry files (*.desktop) in
+# persistence_startup/ have clean, valid Exec lines that do not choke GLib/Gio
+# or cause "Desktop entry contains no valid Exec line" / "Desktop file didn't specify Exec field".
+# ==============================================================================
+
+set timeout 15
+set script_dir "/home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy"
+
+send_user "\n=== REGRESSION TEST: Desktop Entry Exec Line Validation ===\n"
+
+spawn /bin/bash -c {
+    failed=0
+    for f in /home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/persistence_startup/*.desktop; do
+        bname=$(basename "$f")
+        echo -n "Checking $bname... "
+        exec_line=$(grep '^Exec=' "$f" | head -n1)
+        if [ -z "$exec_line" ]; then
+            echo "FAIL: Missing Exec line!"
+            failed=1
+            continue
+        fi
+        
+        # Test for nested bash -c containing internal semicolons or quotes
+        if echo "$exec_line" | grep -q "bash -c 'if "; then
+            echo "FAIL: Detected forbidden nested inline bash execution in $bname!"
+            failed=1
+            continue
+        fi
+        
+        # Must route via sync_and_launch.sh
+        if ! echo "$exec_line" | grep -q "sync_and_launch.sh"; then
+            echo "FAIL: Desktop entry does not route through sync_and_launch.sh!"
+            failed=1
+            continue
+        fi
+        
+        echo "PASS (Clean Exec)"
+    done
+    
+    if [ $failed -eq 0 ]; then
+        echo "ALL_DESKTOP_FILES_VALID"
+        exit 0
+    else
+        echo "DESKTOP_VALIDATION_FAILED"
+        exit 1
+    fi
+}
+
+expect {
+    "ALL_DESKTOP_FILES_VALID" {
+        send_user "\nPASS: All desktop files verified without nested script quoting.\n"
+        exit 0
+    }
+    "DESKTOP_VALIDATION_FAILED" {
+        send_user "\nREPRODUCED FAILURE: Detected invalid Exec line structure in desktop files!\n"
+        exit 1
+    }
+    timeout {
+        send_user "\nFAIL: Timeout checking desktop files\n"
+        exit 1
+    }
+}

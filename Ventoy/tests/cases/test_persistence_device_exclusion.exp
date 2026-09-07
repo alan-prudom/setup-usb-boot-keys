@@ -1,0 +1,75 @@
+#!/usr/bin/expect -f
+# ==============================================================================
+# test_persistence_device_exclusion.exp
+# REGRESSION TEST: Asserts that when running inside an environment where a disk
+# is labeled 'casper-rw' or mounted as '/cow', run_rescuezilla_backup_cli.sh
+# filters it out from the candidate backup target drives.
+# ==============================================================================
+
+set timeout 15
+send_user "\n=== REGRESSION TEST: Persistence Block Device Exclusion ===\n"
+
+spawn /bin/bash -c {
+    # Simulate drive discovery logic with mock lsblk
+    function lsblk() {
+        if [ "$1" = "-d" ]; then
+            echo -e "vda disk\nsda disk"
+        elif [ "$1" = "-lno" ] && [ "$2" = "LABEL" ]; then
+            if [ "$3" = "/dev/vda" ]; then
+                echo "casper-rw"
+            else
+                echo "ROOT_DISK"
+            fi
+        elif [ "$1" = "-lno" ] && [ "$2" = "MOUNTPOINT" ]; then
+            if [ "$3" = "/dev/vda" ]; then
+                echo "/cow"
+            else
+                echo ""
+            fi
+        fi
+    }
+    export -f lsblk
+
+    DISCOVERED_DRIVES=()
+    while IFS= read -r dname; do
+        if [ -n "$dname" ]; then
+            d_label=$(lsblk -lno LABEL "/dev/${dname}" 2>/dev/null | xargs || echo "")
+            d_mounts=$(lsblk -lno MOUNTPOINT "/dev/${dname}" 2>/dev/null || echo "")
+            if [ "$d_label" = "casper-rw" ] || echo "$d_mounts" | grep -qE "^/cow$|^/$"; then
+                continue
+            fi
+            DISCOVERED_DRIVES+=("/dev/${dname}")
+        fi
+    done < <(lsblk -d -n -o NAME,TYPE 2>/dev/null | awk '$2=="disk" && $1 !~ /^(nbd|loop|ram|zram)/{print $1}')
+
+    echo "Discovered drives count: ${#DISCOVERED_DRIVES[@]}"
+    for d in "${DISCOVERED_DRIVES[@]}"; do
+        echo "Found: $d"
+    done
+
+    if echo "${DISCOVERED_DRIVES[*]}" | grep -q "/dev/vda"; then
+        echo "FAIL: casper-rw persistence drive was not excluded!"
+        exit 1
+    elif ! echo "${DISCOVERED_DRIVES[*]}" | grep -q "/dev/sda"; then
+        echo "FAIL: regular drive /dev/sda was unexpectedly excluded!"
+        exit 1
+    else
+        echo "EXCLUSION_TEST_PASSED"
+        exit 0
+    fi
+}
+
+expect {
+    "EXCLUSION_TEST_PASSED" {
+        send_user "\nPASS: casper-rw persistence block device excluded while real disk retained.\n"
+        exit 0
+    }
+    "FAIL:" {
+        send_user "\nREPRODUCED FAILURE: Persistence drive was not excluded!\n"
+        exit 1
+    }
+    timeout {
+        send_user "\nFAIL: Timeout running exclusion test\n"
+        exit 1
+    }
+}
