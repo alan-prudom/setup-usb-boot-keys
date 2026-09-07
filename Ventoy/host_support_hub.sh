@@ -26,23 +26,23 @@ prompt_choice() {
     local max_val="$3"
     local choice=""
     while true; do
-        echo -en "${prompt_msg}"
+        echo -en "${prompt_msg}" >&2
         read -r choice
         choice="$(echo "$choice" | xargs)"
         if [ -z "$choice" ]; then
-            echo -e "  ${YELLOW}⚠️  Empty input (Return key) rejected. Type a number between ${min_val} and ${max_val}.${RESET}"
+            echo -e "  ${YELLOW}⚠️  Empty input (Return key) rejected. Type a number between ${min_val} and ${max_val}.${RESET}" >&2
             continue
         fi
         case "$choice" in
             *[!0-9]*|"")
-                echo -e "  ${RED}⚠️  Invalid input '$choice'. Please type a number between ${min_val} and ${max_val}.${RESET}"
+                echo -e "  ${RED}⚠️  Invalid input '$choice'. Please type a number between ${min_val} and ${max_val}.${RESET}" >&2
                 ;;
             *)
                 if [ "$choice" -ge "$min_val" ] && [ "$choice" -le "$max_val" ]; then
                     echo "$choice"
                     return 0
                 else
-                    echo -e "  ${RED}⚠️  Option '$choice' out of range [${min_val}-${max_val}].${RESET}"
+                    echo -e "  ${RED}⚠️  Option '$choice' out of range [${min_val}-${max_val}].${RESET}" >&2
                 fi
                 ;;
         esac
@@ -208,7 +208,7 @@ main_menu() {
             1)
                 echo -e "\n[*] Launching QEMU VM Launcher..."
                 sudo bash "${SCRIPT_DIR}/run_test_vm.sh"
-                read -rp "Press Enter to return..." _
+                read -rp "Press Enter to return to menu..." _
                 ;;
             2)
                 echo -e "\n[*] Fast-launching Option B Direct Persistence VM..."
@@ -223,17 +223,17 @@ main_menu() {
                     -device virtio-net-pci,netdev=net0 \
                     -vga virtio -display gtk &
                 echo -e "${GREEN}✓ VM launched in background.${RESET}"
-                sleep 2
+                read -rp "Press Enter to return to menu..." _
                 ;;
             3)
                 echo -e "\n[*] Executing Full Cumulative Automated Test Suite..."
                 bash "${SCRIPT_DIR}/tests/harness/run_cumulative_suite.sh" "/tmp/cumulative_all_scripts"
-                read -rp "Press Enter to return..." _
+                read -rp "Press Enter to return to menu..." _
                 ;;
             4)
                 echo -e "\n[*] Extracting and Merging Coverage Data..."
                 bash "${SCRIPT_DIR}/extract_and_merge_coverage.sh"
-                read -rp "Press Enter to return..." _
+                read -rp "Press Enter to return to menu..." _
                 ;;
             5)
                 manage_host_coverage_submenu
@@ -241,12 +241,12 @@ main_menu() {
             6)
                 echo -e "\n[*] Deploying Four-Tier Redundancy & OpenSSH..."
                 sudo bash "${SCRIPT_DIR}/deploy_four_tier_persistence.sh"
-                read -rp "Press Enter to return..." _
+                read -rp "Press Enter to return to menu..." _
                 ;;
             7)
                 echo -e "\n[*] Running OBD Pre-Flight Check..."
                 bash "${SCRIPT_DIR}/obd_preflight_check.sh"
-                read -rp "Press Enter to return..." _
+                read -rp "Press Enter to return to menu..." _
                 ;;
             8)
                 echo -e "\nExiting Host Hub. Goodbye!"

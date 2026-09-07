@@ -45,7 +45,7 @@ expect {
     timeout { exit 1 }
 }
 
-# 4. Partition Scope: Verify USB options and select 1 (sdb1 sdb2 sdb3)
+# 4. Partition Scope: Verify dynamic partition menu and select 3 (Custom selection)
 expect {
     "Partition Backup Scope for /dev/sdb" {
         send_user "\nPASS: USB Partition Scope menu displayed.\n"
@@ -54,9 +54,17 @@ expect {
 }
 
 expect {
-    "Ventoy Core Partitions: sdb1 (Ventoy) + sdb2 (EFI) + sdb3 (Linux OS)" {
-        send_user "\nPASS: Verified USB core partitions recommendation.\n"
-        send "1\r"
+    "Select partition scope" {
+        send_user "\nPASS: Selecting Option 3 (Custom selection)...\n"
+        send "3\r"
+    }
+    timeout { exit 1 }
+}
+
+expect {
+    "Enter partition names separated by space" {
+        send_user "\nPASS: Entering sdb1 sdb2 sdb3...\n"
+        send "sdb1 sdb2 sdb3\r"
     }
     timeout { exit 1 }
 }

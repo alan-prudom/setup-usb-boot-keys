@@ -136,7 +136,7 @@ while IFS= read -r dname; do
     if [ -n "$dname" ] && [ -b "/dev/${dname}" ]; then
         DISCOVERED_DRIVES+=("/dev/${dname}")
     fi
-done < <(lsblk -d -n -o NAME,TYPE 2>/dev/null | awk '$2=="disk"{print $1}')
+done < <(lsblk -d -n -o NAME,TYPE 2>/dev/null | awk '$2=="disk" && $1 !~ /^(nbd|loop|ram|zram)/{print $1}')
 
 if [ "${#DISCOVERED_DRIVES[@]}" -eq 0 ]; then
     echo -e "${RED}✗ Error: No disk block devices found on this system!${RESET}"
