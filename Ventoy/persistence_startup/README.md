@@ -15,9 +15,11 @@ These files and configurations are pre-loaded inside `rescuezilla-persistence.da
 * **Desktop Folder:** Accessible via the `~/Desktop/Scripts_Folder` symlink.
 
 ### 2. Desktop Launchers (`/home/ubuntu/Desktop/`)
-* **`Rescue_Suite.desktop`:** Launches `sudo bash /scripts/rescue_suite_launcher.sh`.
-* **`Run_Backup_CLI.desktop`:** Launches `sudo bash /scripts/run_rescuezilla_backup_cli.sh`.
-* **`Post_Backup_Wizard.desktop`:** Launches `sudo bash /scripts/post-backup-wizard.sh`.
+* **`Live_Rescue_Hub.desktop`:** Launches `bash /usr/local/bin/sync_and_launch.sh /scripts/live_rescue_hub.sh` (Master Live Menu).
+* **`Rescue_Suite.desktop`:** Launches `sudo bash /usr/local/bin/sync_and_launch.sh /scripts/rescue_suite_launcher.sh` (Unified 10-function Suite).
+* **`Run_Backup_CLI.desktop`:** Launches `sudo bash /usr/local/bin/sync_and_launch.sh /scripts/run_rescuezilla_backup_cli.sh`.
+* **`Post_Backup_Wizard.desktop`:** Launches `sudo bash /usr/local/bin/sync_and_launch.sh /scripts/post-backup-wizard.sh`.
+* **Self-Healing Wrapper (`sync_and_launch.sh`):** Deployed to `/usr/local/bin/sync_and_launch.sh`; automatically synchronizes fresh scripts from Partition 4/USB into `/scripts/` before executing them, eliminating status 126 errors.
 * **Window Persistence:** Configured with `xfce4-terminal --hold` so terminal windows remain open upon completion or error.
 
 ### 3. Startup Mount Automation (`mount_storage_startup.sh`)

@@ -51,15 +51,19 @@ Following the September 5, 2026 consolidation, this environment incorporates the
 
 | Script / File | Role & Capabilities |
 | :--- | :--- |
-| **`lib/lib_hardware_detect.sh`** | Hardware Abstraction Layer library for dynamic USB device, partition, driver, and machine DMI model detection. |
-| **`profiles/key1_ntfs.conf`** | Geometric and hardware configuration profile for Key 1. |
-| **`rescue_suite_launcher.sh`** | Unified Rescue Suite (Backup, Restore, Clone, Verify, Image Explorer, Diagnostics). |
-| **`run_test_vm.sh`** | QEMU virtual machine test harness supporting `--boot`, `--display`, and `--storage` flags. |
-| **`deploy_four_tier_persistence.sh`** | Synchronizes tools, helper libraries (`lib/`), desktop launchers, and profiles into `rescuezilla-persistence.dat`. |
-| **`run_rescuezilla_backup_cli.sh`** | Turnkey CLI backup runner invoking Clonezilla `ocs-sr` over SSHFS with interactive Rescue Mode (`--rescue`) and dynamic machine/partition naming. |
+| **`host_support_hub.sh`** | **Host Master Hub**: Interactive orchestrator on Ubuntu for launching QEMU, running automated Expect test suites, and extracting coverage from Partition 4. |
+| **`live_rescue_hub.sh`** | **Live Rescue Hub**: Interactive orchestrator in Rescuezilla Live for running backup assistants, wizards, OBD checks, and coverage submenu. |
+| **`rescue_suite_launcher.sh`** | Unified Rescue Suite (Backup, Restore, Clone, Verify, Image Explorer, Diagnostics) with multi-path self-healing script discovery. |
+| **`run_rescuezilla_backup_cli.sh`** | Dynamic drive and partition scanner invoking Clonezilla `ocs-sr` over SSHFS with interactive Rescue Mode (`--rescue`) and token pre-validation. |
 | **`post-backup-wizard.sh`** | Telemetry parser, error analyzer, bad sector triage, and diagnostic bundle extractor. |
+| **`run_test_vm.sh`** | QEMU virtual machine test harness with TigerVNC dynamic auto-fit (`-RemoteResize=1`), X11 root display authorization, and pre-snapshot buffer syncing. |
+| **`deploy_four_tier_persistence.sh`** | Synchronizes tools, helper libraries (`lib/`), desktop launchers, `terminalrc` font & zoom shortcuts, and `sync_and_launch.sh` into `rescuezilla-persistence.dat`. |
+| **`persistence_startup/sync_and_launch.sh`** | Self-healing launcher ensuring fresh scripts from Partition 4/USB are synchronized into `/scripts/` before execution. |
 | **`export_diagnostic_bundle.sh`** | Universal diagnostic harvester collecting Clonezilla/Partclone logs, dmesg, SMART telemetry, and OS state to USB data storage. |
-| **`sda_rescue_backup.sh`** | Bad-sector rescue engine with pre-flight storage assertions and non-destructive imaging. |
+| **`lib/lib_hardware_detect.sh`** | Hardware Abstraction Layer library for dynamic USB device, partition, driver, and machine DMI model detection. |
+| **`tests/harness/run_cumulative_suite.sh`** | Master test runner executing all Expect regression test cases (8 suites) with line & branch coverage via `bash_trace_lcov.py`. |
+| **`tests/cases/test_corrupt_binary_regression.exp`** | Automated regression test asserting status 126 prevention and corrupt binary rejection. |
+| **`profiles/key1_ntfs.conf`** | Geometric and hardware configuration profile for Key 1. |
 
 ---
 

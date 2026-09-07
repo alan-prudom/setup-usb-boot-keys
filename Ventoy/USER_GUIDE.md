@@ -220,27 +220,31 @@ sudo bash post-backup-wizard.sh [optional_path_to_log]
 ## 5. Quick Reference Cheat Sheet
 
 ```bash
-# --- 1. BOOT & MBR REPAIR ---
-sudo ./Ventoy2Disk.sh -u /dev/sdb               # Non-destructive Ventoy MBR repair
+# --- 1. HOST SUPPORT & ORCHESTRATION ---
+bash host_support_hub.sh                        # Host Master Hub (VMs, Expect Test Suites, Coverage)
 
-# --- 2. NTFS FIX & MOUNT ---
+# --- 2. LIVE GUEST RESCUE HUB ---
+bash live_rescue_hub.sh                         # Live Master Hub (Backup, Wizard, OBD, Coverage)
+
+# --- 3. RUN UNIFIED RESCUE SUITE ---
+sudo bash rescue_suite_launcher.sh              # 5-function Backup, Restore, Clone, Verify, Explore
+
+# --- 4. RUN BACKUP CLI DIRECTLY ---
+sudo bash run_rescuezilla_backup_cli.sh          # Dynamic drive/partition backup runner
+
+# --- 5. RUN QEMU TEST HARNESS ---
+sudo bash run_test_vm.sh --boot 1 --display 2 --storage 1 # Safe CoW VM test with TigerVNC (-RemoteResize=1)
+sudo bash run_test_vm.sh --boot 1 --display 1 --storage 1 # Safe CoW VM test with Native GTK Window
+
+# --- 6. RUN CUMULATIVE AUTOMATED EXPECT SUITE ---
+bash tests/harness/run_cumulative_suite.sh /tmp/cumulative_all_scripts # 8 automated test cases
+
+# --- 7. NTFS FIX & MOUNT ---
 sudo ntfsfix -d /dev/sdb4                       # Clear NTFS dirty/hibernation bit
 sudo mkdir -p /mnt/ntfs_data                    # Create mount point
 sudo mount -t ntfs-3g -o rw /dev/sdb4 /mnt/ntfs_data # Mount Read-Write
 
-# --- 3. RUN BACKUP CLI ---
-sudo bash run_rescuezilla_backup_cli.sh          # Full automated backup runner
-
-# --- 4. RUN UNIFIED RESCUE SUITE ---
-sudo bash rescue_suite_launcher.sh              # 5-function Backup, Restore, Clone, Verify, Explore
-
-# --- 5. RUN QEMU TEST HARNESS ---
-sudo bash run_test_vm.sh --boot 1 --display 2 --storage 1 # Safe CoW VM test with VNC
-
-# --- 6. RUN DIAGNOSTIC WIZARD ---
-sudo bash post-backup-wizard.sh                 # Inspect logs and export diagnostic bundle
-
-# --- 7. DRIVE HEALTH CHECK ---
+# --- 8. DRIVE HEALTH CHECK ---
 sudo smartctl -H /dev/sda                       # Check health status of internal drive
 sudo smartctl -H /dev/sdb                       # Check health status of USB drive
 ```
