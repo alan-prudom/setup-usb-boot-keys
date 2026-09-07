@@ -89,6 +89,10 @@ for TDIR in "${TARGET_DIRS[@]}"; do
             ln -sf "/scripts/${script_file}" "$TDIR/usr/local/bin/${script_file}"
         fi
     done
+    if [ -f "${SCRIPT_DIR}/persistence_startup/sync_and_launch.sh" ]; then
+        cp "${SCRIPT_DIR}/persistence_startup/sync_and_launch.sh" "$TDIR/usr/local/bin/sync_and_launch.sh"
+        chmod +x "$TDIR/usr/local/bin/sync_and_launch.sh"
+    fi
     if [ -d "${SCRIPT_DIR}/lib" ]; then
         mkdir -p "$TDIR/scripts/lib"
         cp -a "${SCRIPT_DIR}/lib/"* "$TDIR/scripts/lib/" 2>/dev/null || true
