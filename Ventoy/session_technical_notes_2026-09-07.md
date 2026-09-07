@@ -16,8 +16,11 @@ During this session, we resolved critical operational blockers observed during l
 4. **Symlink Canonicalization**: Fixed `SCRIPT_DIR` resolution in `host_support_hub.sh` so symlinks located in `/home/alan/` accurately resolve to the underlying repository directory.
 5. **TigerVNC Auto-Fit & Dynamic Scaling**: Enabled `-RemoteResize=1` in TigerVNC viewer and documented the `F8` interactive menu to eliminate desktop scrollbars.
 6. **Remediation of Error 126 (`cannot execute binary file`)**: Diagnosed stale/corrupted `/scripts/` binaries inside the live guest overlay, authored a self-healing synchronizer (`sync_and_launch.sh`), added multi-path candidate fallbacks with header verification, and enforced kernel `sync` before snapshot creation.
-7. **Automated Regression Suite Expansion**: Authored [`test_corrupt_binary_regression.exp`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/tests/cases/test_corrupt_binary_regression.exp), bringing the master test suite to 8 out of 8 passing tests (100% success rate, 37.5% cumulative branch coverage).
+7. **Automated Regression Suite Expansion**: Authored [`test_corrupt_binary_regression.exp`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/tests/cases/test_corrupt_binary_regression.exp), [`test_partclone_bitmap_mismatch_regression.exp`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/tests/cases/test_partclone_bitmap_mismatch_regression.exp), [`test_desktop_exec_validation.exp`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/tests/cases/test_desktop_exec_validation.exp), and [`test_persistence_device_exclusion.exp`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/tests/cases/test_persistence_device_exclusion.exp), bringing the master test suite to 11 out of 11 passing tests (100% success rate).
 8. **Artifact Versioning**: Committed [`automated_coverage_plan.md`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/docs/automated_coverage_plan.md) to Git under `Ventoy/docs/`.
+9. **Desktop Entry Syntax & Launcher Standardization**: Standardized `Run_Backup_CLI.desktop` and `Post_Backup_Wizard.desktop` to use `/usr/local/bin/sync_and_launch.sh` instead of nested bash quotes, resolving the XFCE/GIO "no valid Exec line" error.
+10. **Persistence Device Exclusion**: Excluded `casper-rw` and `/cow` block devices from the backup source target list to prevent partclone bitmap corruption when imaging active root overlays.
+11. **Canonical Path LCOV & HTML Merging**: Resolved split directory rows in the `genhtml` report by standardizing all tracefile source paths to the canonical filesystem `realpath` and applying `--prefix`.
 
 ---
 
@@ -150,7 +153,7 @@ The test suite was expanded with [`test_corrupt_binary_regression.exp`](file:///
 - Traps and fails immediately if `cannot execute binary file` or `status 126` occurs.
 - Asserts clean fallback to an authoritative runner or the safe Clonezilla wizard.
 
-### Master Cumulative Test Run Results:
+### Master Cumulative Test Run Results (11 Suites):
 ```text
 ======================================================================
     🧪 MASTER CUMULATIVE TEST & BRANCH COVERAGE SUITE (uv + expect)   
@@ -159,15 +162,18 @@ The test suite was expanded with [`test_corrupt_binary_regression.exp`](file:///
 [*] Running: test_backup_cli_prompts.exp...                     ✓ passed
 [*] Running: test_backup_cli_sdb.exp...                         ✓ passed
 [*] Running: test_corrupt_binary_regression.exp...              ✓ passed
+[*] Running: test_desktop_exec_validation.exp...                ✓ passed
 [*] Running: test_dynamic_drive_and_partition_validation.exp... ✓ passed
 [*] Running: test_hardware_detect_lib.exp...                    ✓ passed
+[*] Running: test_partclone_bitmap_mismatch_regression.exp...   ✓ passed
+[*] Running: test_persistence_device_exclusion.exp...           ✓ passed
 [*] Running: test_post_backup_wizard.exp...                     ✓ passed
 [*] Running: test_rescue_suite_launcher.exp...                  ✓ passed
 
-Overall Coverage Rate:
-  lines......: 37.6% (366 of 973 lines)
-  branches...: 37.5% (94 of 251 branches)
-  • Browsable HTML: /tmp/cumulative_regression_test/html/index.html
+Overall Coverage Rate (Combined Automated & Live VM Runs):
+  lines......: 46.6% (203 of 436 lines)
+  branches...: 42.1% (53 of 126 branches)
+  • Browsable HTML: Ventoy/tests/results/merged_html/index.html
 ```
 
 ---
@@ -176,16 +182,22 @@ Overall Coverage Rate:
 
 | File Path | Nature of Modification |
 | :--- | :--- |
-| [`Ventoy/host_support_hub.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/host_support_hub.sh) | Separated prompt output to `stderr`; added recursive symlink canonicalization; routed Option 2 to `run_test_vm.sh --boot 2`. |
-| [`Ventoy/live_rescue_hub.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/live_rescue_hub.sh) | Separated prompt output to `stderr`; added recursive symlink canonicalization; improved coverage management options. |
-| [`Ventoy/run_rescuezilla_backup_cli.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/run_rescuezilla_backup_cli.sh) | Added dynamic block device discovery (`lsblk`) excluding `nbd`/`loop`/`ram`; added strict partition token pre-validation. |
+| [`Ventoy/host_support_hub.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/host_support_hub.sh) | Separated prompt output to `stderr`; added recursive symlink canonicalization; routed Option 2 to `run_test_vm.sh --boot 2`; added instrumentation mode toggle. |
+| [`Ventoy/live_rescue_hub.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/live_rescue_hub.sh) | Separated prompt output to `stderr`; added recursive symlink canonicalization; improved coverage management options; added instrumentation mode toggle. |
+| [`Ventoy/run_rescuezilla_backup_cli.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/run_rescuezilla_backup_cli.sh) | Added dynamic block device discovery (`lsblk`) excluding `nbd`/`loop`/`ram`; added strict partition token pre-validation; excluded `casper-rw`/`/cow` persistence disk; added partclone bitmap error triage. |
 | [`Ventoy/rescue_suite_launcher.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/rescue_suite_launcher.sh) | Added multi-path discovery for `run_rescuezilla_backup_cli.sh`; added `head -n 1` bash header assertion to prevent status 126 crashes. |
 | [`Ventoy/run_test_vm.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/run_test_vm.sh) | Added `xhost` root display authorization; added `sync` before CoW snapshot; configured TigerVNC with `-RemoteResize=1`. |
 | [`Ventoy/deploy_four_tier_persistence.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/deploy_four_tier_persistence.sh) | Deploys `sync_and_launch.sh` to `/usr/local/bin`; configured `terminalrc` font size and zoom shortcuts; removed slow recursive finds. |
-| [`Ventoy/persistence_startup/sync_and_launch.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/persistence_startup/sync_and_launch.sh) | **NEW**: Self-healing wrapper syncing fresh scripts from Partition 4 into `/scripts/` before launching live tools. |
+| [`Ventoy/persistence_startup/sync_and_launch.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/persistence_startup/sync_and_launch.sh) | **NEW**: Self-healing wrapper syncing fresh scripts from Partition 4 into `/scripts/` before launching live tools; checks global instrumentation mode toggle. |
 | [`Ventoy/persistence_startup/Rescue_Suite.desktop`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/persistence_startup/Rescue_Suite.desktop) | Updated `Exec` to run via `sync_and_launch.sh`. |
 | [`Ventoy/persistence_startup/Live_Rescue_Hub.desktop`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/persistence_startup/Live_Rescue_Hub.desktop) | Updated `Exec` to run via `sync_and_launch.sh`. |
+| [`Ventoy/persistence_startup/Run_Backup_CLI.desktop`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/persistence_startup/Run_Backup_CLI.desktop) | Standardized `Exec` to use `sudo bash /usr/local/bin/sync_and_launch.sh /scripts/run_rescuezilla_backup_cli.sh` eliminating nested bash quoting syntax errors. |
+| [`Ventoy/persistence_startup/Post_Backup_Wizard.desktop`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/persistence_startup/Post_Backup_Wizard.desktop) | Standardized `Exec` to use `sudo bash /usr/local/bin/sync_and_launch.sh /scripts/post-backup-wizard.sh` eliminating nested bash quoting syntax errors. |
+| [`Ventoy/extract_and_merge_coverage.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/extract_and_merge_coverage.sh) | Added `/tmp/live_coverage` SCP fallback from live VM; canonicalized source paths to `realpath` and added `--prefix` to `genhtml` to avoid duplicate split directories. |
 | [`Ventoy/tests/cases/test_corrupt_binary_regression.exp`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/tests/cases/test_corrupt_binary_regression.exp) | **NEW**: Automated regression test asserting status 126 prevention and corrupt binary rejection. |
 | [`Ventoy/tests/cases/test_dynamic_drive_and_partition_validation.exp`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/tests/cases/test_dynamic_drive_and_partition_validation.exp) | **NEW**: Expect test exercising dynamic drive discovery and partition list validation. |
+| [`Ventoy/tests/cases/test_desktop_exec_validation.exp`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/tests/cases/test_desktop_exec_validation.exp) | **NEW**: Automated regression test asserting clean, non-nested XDG Exec lines in all `.desktop` launcher files. |
+| [`Ventoy/tests/cases/test_persistence_device_exclusion.exp`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/tests/cases/test_persistence_device_exclusion.exp) | **NEW**: Automated regression test asserting `casper-rw` and `/cow` persistence devices are excluded from backup source targets. |
+| [`Ventoy/tests/cases/test_partclone_bitmap_mismatch_regression.exp`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/tests/cases/test_partclone_bitmap_mismatch_regression.exp) | **NEW**: Automated regression test asserting Partclone bitmap error trapping and triage guidance. |
 | [`Ventoy/tests/cases/test_backup_cli_sdb.exp`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/tests/cases/test_backup_cli_sdb.exp) | Updated regex match to align with dynamic partition scope menu. |
 | [`Ventoy/docs/automated_coverage_plan.md`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/docs/automated_coverage_plan.md) | **NEW**: Version-controlled architectural specification for the automated testing loop. |

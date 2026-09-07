@@ -61,8 +61,11 @@ Following the September 5, 2026 consolidation, this environment incorporates the
 | **`persistence_startup/sync_and_launch.sh`** | Self-healing launcher ensuring fresh scripts from Partition 4/USB are synchronized into `/scripts/` before execution. |
 | **`export_diagnostic_bundle.sh`** | Universal diagnostic harvester collecting Clonezilla/Partclone logs, dmesg, SMART telemetry, and OS state to USB data storage. |
 | **`lib/lib_hardware_detect.sh`** | Hardware Abstraction Layer library for dynamic USB device, partition, driver, and machine DMI model detection. |
-| **`tests/harness/run_cumulative_suite.sh`** | Master test runner executing all Expect regression test cases (8 suites) with line & branch coverage via `bash_trace_lcov.py`. |
+| **`tests/harness/run_cumulative_suite.sh`** | Master test runner executing all Expect regression test cases (11 suites) with line & branch coverage via `bash_trace_lcov.py`. |
 | **`tests/cases/test_corrupt_binary_regression.exp`** | Automated regression test asserting status 126 prevention and corrupt binary rejection. |
+| **`tests/cases/test_desktop_exec_validation.exp`** | Automated regression test validating all `.desktop` launcher files against XDG / GIO parsing specifications. |
+| **`tests/cases/test_persistence_device_exclusion.exp`** | Automated regression test asserting live persistence / casper-rw disk exclusion from backup targets. |
+| **`tests/cases/test_partclone_bitmap_mismatch_regression.exp`** | Automated regression test validating Partclone bitmap mismatch error triage and remediation guidance. |
 | **`profiles/key1_ntfs.conf`** | Geometric and hardware configuration profile for Key 1. |
 
 ---
