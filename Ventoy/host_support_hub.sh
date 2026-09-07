@@ -211,18 +211,8 @@ main_menu() {
                 read -rp "Press Enter to return to menu..." _
                 ;;
             2)
-                echo -e "\n[*] Fast-launching Option B Direct Persistence VM..."
-                sudo DISPLAY=:0 XAUTHORITY="/run/user/1000/.mutter-Xwaylandauth.ZKSWU3" qemu-system-x86_64 \
-                    -enable-kvm -cpu host -smp 2 -m 3072 \
-                    -kernel /media/devmon/Ventoy/boot_cache/vmlinuz \
-                    -initrd /media/devmon/Ventoy/boot_cache/initrd.lz \
-                    -append "boot=casper persistent noprompt console=ttyS0 console=tty1 quiet splash ---" \
-                    -cdrom /media/devmon/Ventoy/rescuezilla-2.6.2-64bit.noble.iso \
-                    -drive file=/media/devmon/Ventoy/rescuezilla-persistence.dat,format=raw,if=virtio,cache=writeback \
-                    -netdev user,id=net0,hostfwd=tcp::2222-:22 \
-                    -device virtio-net-pci,netdev=net0 \
-                    -vga virtio -display gtk &
-                echo -e "${GREEN}✓ VM launched in background.${RESET}"
+                echo -e "\n[*] Fast-launching Option B Direct Persistence VM via run_test_vm.sh..."
+                sudo bash "${SCRIPT_DIR}/run_test_vm.sh" --boot 2
                 read -rp "Press Enter to return to menu..." _
                 ;;
             3)

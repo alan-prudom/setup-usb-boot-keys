@@ -16,6 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Find persistence container
 IMG=""
 for candidate in \
+    "/media/devmon/Ventoy/rescuezilla-persistence.dat" \
     "/media/alan/Ventoy1/rescuezilla-persistence.dat" \
     "/media/alan/Ventoy/rescuezilla-persistence.dat" \
     "${SCRIPT_DIR}/rescuezilla-persistence.dat"; do
@@ -25,12 +26,8 @@ for candidate in \
     fi
 done
 
-if [ -z "$IMG" ]; then
-    IMG=$(find /media /mnt -name "rescuezilla-persistence.dat" 2>/dev/null | head -n 1)
-fi
-
 if [ -z "$IMG" ] || [ ! -f "$IMG" ]; then
-    echo "Error: rescuezilla-persistence.dat not found."
+    echo "Error: rescuezilla-persistence.dat not found in standard paths (/media/devmon/Ventoy, ${SCRIPT_DIR})."
     exit 1
 fi
 

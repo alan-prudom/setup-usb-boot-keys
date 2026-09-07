@@ -36,7 +36,9 @@ USB_DEV="$(detect_usb_device 2>/dev/null || echo "/dev/sdb")"
 # Dynamic ISO Discovery
 ISO_PATH=""
 for iso_cand in \
+    "/media/devmon/sdb4-usb-Generic-_SD_MMC_/Ventoy images/rescuezilla-2.6.1-64bit.oracular.iso" \
     "/media/devmon/Ventoy/rescuezilla-2.6.2-64bit.noble.iso" \
+    "/media/devmon/Ventoy/rescuezilla-2.6.1-64bit.oracular.iso" \
     "/media/alan/Ventoy1/rescuezilla-2.6.1-64bit.oracular.iso" \
     "/media/alan/Ventoy/rescuezilla-2.6.2-64bit.noble.iso"; do
     if [ -f "$iso_cand" ]; then
@@ -44,24 +46,19 @@ for iso_cand in \
         break
     fi
 done
-if [ -z "$ISO_PATH" ]; then
-    ISO_PATH=$(find /media /mnt -name "*rescuezilla*.iso" 2>/dev/null | head -n 1)
-fi
 
 # Dynamic Persistence Discovery
 PERSIST_IMG=""
 for dat_cand in \
     "/media/devmon/Ventoy/rescuezilla-persistence.dat" \
     "/media/alan/Ventoy1/rescuezilla-persistence.dat" \
-    "/media/alan/Ventoy/rescuezilla-persistence.dat"; do
+    "/media/alan/Ventoy/rescuezilla-persistence.dat" \
+    "${SCRIPT_DIR}/rescuezilla-persistence.dat"; do
     if [ -f "$dat_cand" ]; then
         PERSIST_IMG="$dat_cand"
         break
     fi
 done
-if [ -z "$PERSIST_IMG" ]; then
-    PERSIST_IMG=$(find /media /mnt -name "*persistence*.dat" 2>/dev/null | head -n 1)
-fi
 
 VNC_PORT="5901"
 SSH_PORT="2222"
