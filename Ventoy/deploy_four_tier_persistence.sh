@@ -247,6 +247,26 @@ XDG_EOF
     # Remove obsolete desktop entries that produce "no valid Exec line" error
     rm -f "$TDIR/home/ubuntu/Desktop/mount-ntfs.desktop" "$TDIR/etc/xdg/autostart/mount-ntfs.desktop"
 
+    # Deploy comfortable font (Monospace 10) & unlimited scrollback & zoom shortcuts
+    mkdir -p "$TDIR/home/ubuntu/.config/xfce4/terminal" "$TDIR/root/.config/xfce4/terminal"
+    cat << 'TERM_RC' > "$TDIR/home/ubuntu/.config/xfce4/terminal/terminalrc"
+[Configuration]
+FontName=Monospace 10
+MiscDefaultGeometry=120x36
+ScrollingUnlimited=TRUE
+ShortcutsZoomIn=<Primary><Shift>plus
+ShortcutsZoomOut=<Primary>minus
+ShortcutsZoomReset=<Primary>0
+MiscAlwaysShowTabs=FALSE
+MiscBell=FALSE
+MiscConfirmClose=TRUE
+MiscCursorBlinks=FALSE
+MiscCursorShape=TERMINAL_CURSOR_SHAPE_BLOCK
+MiscShowUnsafePasteDialog=FALSE
+TitleMode=TERMINAL_TITLE_REPLACE
+TERM_RC
+    cp "$TDIR/home/ubuntu/.config/xfce4/terminal/terminalrc" "$TDIR/root/.config/xfce4/terminal/terminalrc"
+
     # Fix malformed xfce4-terminal.desktop (missing Exec in [Desktop Action preferences])
     for term_file in "$TDIR/home/ubuntu/.local/share/applications/xfce4-terminal.desktop" "$TDIR/home/ubuntu/Desktop/xfce4-terminal.desktop"; do
         if [ -f "$term_file" ] && [ ! -L "$term_file" ]; then

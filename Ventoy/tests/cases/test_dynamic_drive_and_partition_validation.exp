@@ -1,0 +1,128 @@
+#!/usr/bin/expect -f
+# ==============================================================================
+# test_dynamic_drive_and_partition_validation.exp
+# Automated test case: Verifies dynamic drive discovery, out-of-range drive rejection,
+# partition listing, and strict rejection of non-existent partition names (e.g. sda99).
+# ==============================================================================
+
+set timeout 25
+set script_path [lindex $argv 0]
+if {"$script_path" == ""} {
+    set script_path "/home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/run_rescuezilla_backup_cli.sh"
+}
+
+send_user "\n=== TEST_CASE: Dynamic Drive Discovery & Strict Partition Validation ===\n"
+
+spawn bash "$script_path"
+
+# 1. Header Banner Check
+expect {
+    "LIVE COMMAND-LINE BACKUP ASSISTANT" {
+        send_user "\nPASS: Welcome Banner detected\n"
+    }
+    timeout {
+        send_user "\nFAIL: Timed out waiting for Welcome Banner\n"
+        exit 1
+    }
+}
+
+# 2. Remote Storage Connection Check
+expect {
+    "Verified READ-WRITE access" {
+        send_user "\nPASS: Remote storage mount verified\n"
+    }
+    timeout {
+        send_user "\nFAIL: Remote storage mount not detected\n"
+        exit 1
+    }
+}
+
+# 3. Dynamic Target Drive Selection:
+# Test out-of-range rejection then select Drive 1 (/dev/sda)
+expect {
+    -re {Select drive to backup \[1-([0-9]+)\]:} {
+        set max_drive $expect_out(1,string)
+        send_user "\nPASS: Dynamic drives discovered (1 to $max_drive). Testing invalid drive selection...\n"
+        send "99\r"
+    }
+    timeout {
+        send_user "\nFAIL: Target drive prompt not reached\n"
+        exit 1
+    }
+}
+
+expect {
+    -re {Invalid option '99'|out of range} {
+        send_user "\nPASS: Invalid drive choice rejected. Selecting Drive 1...\n"
+        send "1\r"
+    }
+    timeout {
+        send_user "\nFAIL: Failed to reject out-of-bounds drive choice\n"
+        exit 1
+    }
+}
+
+# 4. Partition Scope Selection:
+# Expect available partitions list and select Custom selection (3)
+expect {
+    "Available Partitions on" {
+        send_user "\nPASS: Dynamic partition list rendered\n"
+    }
+    timeout {
+        send_user "\nFAIL: Partition list header not found\n"
+        exit 1
+    }
+}
+
+expect {
+    -re {Select partition scope \[1-3\]:} {
+        send_user "\nINFO: Scope prompt reached. Choosing option 3 (Custom selection)...\n"
+        send "3\r"
+    }
+    timeout {
+        send_user "\nFAIL: Scope selection prompt not found\n"
+        exit 1
+    }
+}
+
+# 5. Strict Partition Validation:
+# Type non-existent partition 'sda999' and assert that script catches it
+expect {
+    "Enter partition names separated by space" {
+        send_user "\nINFO: Prompt for custom partition list reached. Submitting non-existent partition 'sda999'...\n"
+        send "sda999\r"
+    }
+    timeout {
+        send_user "\nFAIL: Custom partition prompt not reached\n"
+        exit 1
+    }
+}
+
+expect {
+    "The following partition(s) do not exist on" {
+        send_user "\nPASS: Branch verified! Non-existent partition 'sda999' successfully caught and rejected.\n"
+        # Now submit valid partition (sda1)
+        send "sda1\r"
+    }
+    timeout {
+        send_user "\nFAIL: Script failed to reject invalid partition name 'sda999'\n"
+        exit 1
+    }
+}
+
+# 6. Backup Image Naming Prompt:
+expect {
+    "Enter image folder name" {
+        send_user "\nPASS: Valid partition accepted, naming prompt reached.\n"
+        # Abort cleanly with Ctrl-C to finish test
+        send "\003"
+    }
+    timeout {
+        send_user "\nFAIL: Naming prompt not reached after valid partition entry\n"
+        exit 1
+    }
+}
+
+expect eof
+send_user "\n=== TEST_CASE COMPLETED SUCCESSFULLY ===\n"
+exit 0

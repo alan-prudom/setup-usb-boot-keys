@@ -127,61 +127,129 @@ else
     exit 1
 fi
 
-# 3. Select Drive
+# 3. Dynamic Drive Discovery & Selection
 echo -e "\n${BOLD}[2/4] Target Drive Selection${RESET}"
-echo -e "${DIM}  ℹ️  Why we ask this: Both the internal system SSD (/dev/sda) and the USB boot drive (/dev/sdb) are present. Selecting the correct drive prevents accidentally reading or cloning the wrong physical disk.${RESET}"
-echo -e "  ${CYAN}[1]${RESET} /dev/sda (Internal 1TB Drive - Windows OS + User Data)"
-echo -e "  ${CYAN}[2]${RESET} /dev/sdb (128GB USB / SD Drive - Ventoy Bootloader & Live OS)"
-drive_choice=$(prompt_choice "Select drive to backup [1-2]: " 1 2)
+echo -e "${DIM}  ℹ️  Why we ask this: Dynamically scans all physical and virtual disks attached to this machine to prevent cloning or saving the wrong drive.${RESET}"
 
-if [ "$drive_choice" = "2" ]; then
-    TARGET_DRIVE="/dev/sdb"
-    DEFAULT_DRIVE_TAG="Ventoy-USB"
-else
-    TARGET_DRIVE="/dev/sda"
-    if declare -f detect_machine_model >/dev/null 2>&1; then
-        DEFAULT_DRIVE_TAG="$(detect_machine_model)"
-    else
-        DEFAULT_DRIVE_TAG="Host-PC"
+DISCOVERED_DRIVES=()
+while IFS= read -r dname; do
+    if [ -n "$dname" ] && [ -b "/dev/${dname}" ]; then
+        DISCOVERED_DRIVES+=("/dev/${dname}")
     fi
+done < <(lsblk -d -n -o NAME,TYPE 2>/dev/null | awk '$2=="disk"{print $1}')
+
+if [ "${#DISCOVERED_DRIVES[@]}" -eq 0 ]; then
+    echo -e "${RED}✗ Error: No disk block devices found on this system!${RESET}"
+    exit 1
 fi
 
-# 4. Select Partition Scope
-echo -e "\n${BOLD}[3/4] Partition Backup Scope for ${TARGET_DRIVE}${RESET}"
-echo -e "${DIM}  ℹ️  Why we ask this: Backing up an entire 1TB disk takes much longer and consumes massive network storage, whereas backing up only the OS partitions (sda1+sda2) takes minutes and contains everything required to restore Windows.${RESET}"
-if [ "$TARGET_DRIVE" = "/dev/sda" ]; then
-    echo -e "  ${CYAN}[1]${RESET} Windows OS Partitions: sda1 (System Reserved) + sda2 (OS) [Recommended]"
-    echo -e "  ${CYAN}[2]${RESET} Entire Internal Disk: all partitions on /dev/sda"
-    echo -e "  ${CYAN}[3]${RESET} Custom selection (specify exact partition list)"
+for i in "${!DISCOVERED_DRIVES[@]}"; do
+    dev_path="${DISCOVERED_DRIVES[$i]}"
+    d_size=$(lsblk -d -n -o SIZE "$dev_path" 2>/dev/null | xargs || echo "Unknown")
+    d_model=$(lsblk -d -n -o MODEL "$dev_path" 2>/dev/null | xargs || echo "")
+    d_tran=$(lsblk -d -n -o TRAN "$dev_path" 2>/dev/null | xargs || echo "")
+    [ -z "$d_model" ] && d_model="Disk Device"
+    [ -n "$d_tran" ] && d_model="${d_model} (${d_tran})"
+    echo -e "  ${CYAN}[$((i + 1))]${RESET} ${dev_path} (${d_size}, ${d_model})"
+done
+
+drive_idx=$(prompt_choice "Select drive to backup [1-${#DISCOVERED_DRIVES[@]}]: " 1 "${#DISCOVERED_DRIVES[@]}")
+TARGET_DRIVE="${DISCOVERED_DRIVES[$((drive_idx - 1))]}"
+
+# Determine default drive tag for backup folder naming
+TARGET_BASE=$(basename "$TARGET_DRIVE")
+if [[ "$TARGET_DRIVE" =~ ^/dev/(sd[b-z]|nvme[1-9]|vd[b-z]) ]] && lsblk -n -o LABEL "$TARGET_DRIVE" 2>/dev/null | grep -qi "ventoy"; then
+    DEFAULT_DRIVE_TAG="Ventoy-USB"
+elif declare -f detect_machine_model >/dev/null 2>&1; then
+    DEFAULT_DRIVE_TAG="$(detect_machine_model)"
 else
-    echo -e "  ${CYAN}[1]${RESET} Ventoy Core Partitions: sdb1 (Ventoy) + sdb2 (EFI) + sdb3 (Linux OS) [Recommended]"
-    echo -e "  ${CYAN}[2]${RESET} Entire USB Drive: all partitions on /dev/sdb"
-    echo -e "  ${CYAN}[3]${RESET} Custom selection (specify exact partition list)"
+    DEFAULT_DRIVE_TAG="Host-PC-${TARGET_BASE}"
 fi
 
-scope_choice=$(prompt_choice "Select partition scope [1-3]: " 1 3)
+# 4. Dynamic Partition Discovery & Validation Scope
+echo -e "\n${BOLD}[3/4] Partition Backup Scope for ${TARGET_DRIVE}${RESET}"
+echo -e "${DIM}  ℹ️  Why we ask this: Backing up an entire drive takes longer, whereas backing up specific partitions saves storage and speeds up recovery.${RESET}"
+
+AVAILABLE_PARTS=()
+while IFS= read -r pname; do
+    if [ -n "$pname" ]; then
+        AVAILABLE_PARTS+=("$pname")
+    fi
+done < <(lsblk -n -l -o NAME,TYPE "$TARGET_DRIVE" 2>/dev/null | awk '$2=="part"{print $1}')
+
+echo -e "Available Partitions on ${TARGET_DRIVE}:"
+if [ "${#AVAILABLE_PARTS[@]}" -gt 0 ]; then
+    for p in "${AVAILABLE_PARTS[@]}"; do
+        p_size=$(lsblk -n -o SIZE "/dev/$p" 2>/dev/null | xargs || echo "")
+        p_fs=$(lsblk -n -o FSTYPE "/dev/$p" 2>/dev/null | xargs || echo "")
+        p_label=$(lsblk -n -o LABEL "/dev/$p" 2>/dev/null | xargs || echo "")
+        p_desc="${p_size}"
+        [ -n "$p_fs" ] && p_desc="${p_desc}, ${p_fs}"
+        [ -n "$p_label" ] && p_desc="${p_desc}, label: ${p_label}"
+        echo -e "  • ${BOLD}${p}${RESET} (${p_desc})"
+    done
+    echo ""
+    echo -e "  ${CYAN}[1]${RESET} Entire Disk Image: all partitions on ${TARGET_DRIVE} [Recommended]"
+    if [ "${#AVAILABLE_PARTS[@]}" -ge 2 ]; then
+        echo -e "  ${CYAN}[2]${RESET} First Two Partitions: ${AVAILABLE_PARTS[0]} + ${AVAILABLE_PARTS[1]} (Typical OS + Boot)"
+    else
+        echo -e "  ${CYAN}[2]${RESET} Single Partition: ${AVAILABLE_PARTS[0]}"
+    fi
+    echo -e "  ${CYAN}[3]${RESET} Custom selection (pick exact partition list from above)"
+    scope_choice=$(prompt_choice "Select partition scope [1-3]: " 1 3)
+else
+    echo -e "  ${YELLOW}Notice: No partition table found on ${TARGET_DRIVE}. Backing up raw entire disk.${RESET}"
+    scope_choice="1"
+fi
 
 case "$scope_choice" in
     1)
-        if [ "$TARGET_DRIVE" = "/dev/sda" ]; then
-            PARTITIONS_LIST="sda1 sda2"
-        else
-            PARTITIONS_LIST="sdb1 sdb2 sdb3"
-        fi
+        PARTITIONS_LIST="all"
         ;;
     2)
-        PARTITIONS_LIST="all"
+        if [ "${#AVAILABLE_PARTS[@]}" -ge 2 ]; then
+            PARTITIONS_LIST="${AVAILABLE_PARTS[0]} ${AVAILABLE_PARTS[1]}"
+        else
+            PARTITIONS_LIST="${AVAILABLE_PARTS[0]}"
+        fi
         ;;
     3)
         while true; do
-            echo -en "Enter partition names separated by space (e.g. sda1 sda2): "
+            echo -en "Enter partition names separated by space (e.g. ${AVAILABLE_PARTS[*]:0:2}): "
             read -r user_parts
             user_parts="$(echo "$user_parts" | xargs)"
-            if [ -n "$user_parts" ]; then
-                PARTITIONS_LIST="$user_parts"
-                break
+            if [ -z "$user_parts" ]; then
+                echo -e "  ${YELLOW}⚠️  Partition list cannot be empty. Please enter one or more partition names.${RESET}"
+                continue
             fi
-            echo -e "  ${YELLOW}⚠️  Partition list cannot be empty.${RESET}"
+            
+            # Validate every entered partition against AVAILABLE_PARTS
+            valid_all=1
+            invalid_list=()
+            for up in $user_parts; do
+                # Strip leading /dev/ if provided by user
+                clean_p="${up#/dev/}"
+                found_part=0
+                for ap in "${AVAILABLE_PARTS[@]}"; do
+                    if [ "$clean_p" = "$ap" ]; then
+                        found_part=1
+                        break
+                    fi
+                done
+                if [ "$found_part" -eq 0 ]; then
+                    valid_all=0
+                    invalid_list+=("$up")
+                fi
+            done
+            
+            if [ "$valid_all" -eq 1 ]; then
+                # Clean up partition list format (no /dev/ prefix)
+                PARTITIONS_LIST=$(echo "$user_parts" | sed 's|/dev/||g')
+                break
+            else
+                echo -e "  ${RED}⚠️  The following partition(s) do not exist on ${TARGET_DRIVE}: ${invalid_list[*]}${RESET}"
+                echo -e "  ${DIM}Available on ${TARGET_DRIVE}: ${AVAILABLE_PARTS[*]}${RESET}"
+            fi
         done
         ;;
 esac
