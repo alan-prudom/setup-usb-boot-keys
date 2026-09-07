@@ -15,7 +15,13 @@ CYAN="\033[1;36m"
 DIM="\033[2m"
 RESET="\033[0m"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SCRIPT_SOURCE" ]; do
+    SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_SOURCE")" && pwd)"
+    SCRIPT_SOURCE="$(readlink "$SCRIPT_SOURCE")"
+    [[ $SCRIPT_SOURCE != /* ]] && SCRIPT_SOURCE="${SCRIPT_DIR}/${SCRIPT_SOURCE}"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_SOURCE")" && pwd)"
 RESULTS_DIR="${SCRIPT_DIR}/tests/results"
 HTML_REPORT="${RESULTS_DIR}/merged_html/index.html"
 MERGED_INFO="${RESULTS_DIR}/merged_cumulative_with_live.info"
