@@ -66,8 +66,10 @@ LCOV_ARGS=()
 
 # Find Base Cumulative Suite coverage.info
 BASE_INFO=""
+USER_NAME="${USER:-alan}"
 for cand_base in \
     "${TARGET_DIR}/cumulative_coverage.info" \
+    "/tmp/cumulative_${USER_NAME}_tests/coverage.info" \
     "/tmp/cumulative_all_scripts/coverage.info" \
     "/tmp/cumulative_coverage/coverage.info"; do
     if [ -f "$cand_base" ]; then
@@ -78,8 +80,9 @@ done
 
 if [ -z "$BASE_INFO" ]; then
     echo -e "\n[*] Base cumulative suite not cached. Generating base suite now..."
-    bash "${SCRIPT_DIR}/tests/harness/run_cumulative_suite.sh" "/tmp/cumulative_all_scripts"
-    BASE_INFO="/tmp/cumulative_all_scripts/coverage.info"
+    local_test_out="/tmp/cumulative_${USER_NAME}_tests"
+    bash "${SCRIPT_DIR}/tests/harness/run_cumulative_suite.sh" "$local_test_out"
+    BASE_INFO="${local_test_out}/coverage.info"
 fi
 
 if [ -f "$BASE_INFO" ]; then

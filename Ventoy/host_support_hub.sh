@@ -112,8 +112,8 @@ manage_host_coverage_submenu() {
         done
 
         echo "----------------------------------------------------------------------"
-        echo -e "  ${CYAN}[5]${RESET} 🌐 Open Merged Browsable HTML Report in Browser"
-        echo -e "  ${CYAN}[6]${RESET} 📄 View Extracted Clean Terminal Transcript for a Script"
+        echo -e "  ${CYAN}[5]${RESET} 🌐 Open Browsable HTML Coverage Report in Browser"
+        echo -e "  ${CYAN}[6]${RESET} 📄 View Extracted Terminal Transcripts (Automated & Live)"
         echo -e "  ${CYAN}[7]${RESET} 📥 Pull Latest Coverage & Traces from Partition 4 / VM"
         echo -e "  ${CYAN}[8]${RESET} ♻️  Reset Host Coverage Cache & Stored Traces"
         echo -e "  ${CYAN}[9]${RESET} <-- Return to Main Menu"
@@ -130,32 +130,61 @@ manage_host_coverage_submenu() {
                     echo -e "\n================ [ Transcript: ${sel_target} ] ================"
                     cat "$clean_txt" | less -R || cat "$clean_txt"
                 else
-                    echo -e "\n${YELLOW}No transcript found for ${sel_target} in ${clean_txt}${RESET}"
+                    echo -e "\n${YELLOW}No live transcript found for ${sel_target} in ${clean_txt}${RESET}"
+                    echo -e "Tip: Check Option [6] to view automated test suite transcripts."
                 fi
                 read -rp "Press Enter to return..." _
                 ;;
             5)
+                local html_to_open=""
+                local user_html="/tmp/cumulative_${USER:-alan}_tests/html/index.html"
                 if [ -f "$HTML_REPORT" ]; then
-                    echo -e "\nOpening ${HTML_REPORT}..."
-                    xdg-open "$HTML_REPORT" 2>/dev/null || sensible-browser "$HTML_REPORT" 2>/dev/null || echo "Open file://${HTML_REPORT}"
+                    html_to_open="$HTML_REPORT"
+                elif [ -f "$user_html" ]; then
+                    html_to_open="$user_html"
+                fi
+
+                if [ -n "$html_to_open" ]; then
+                    echo -e "\nOpening ${html_to_open}..."
+                    xdg-open "$html_to_open" 2>/dev/null || sensible-browser "$html_to_open" 2>/dev/null || echo "Open file://${html_to_open}"
                 else
-                    echo -e "\n${YELLOW}HTML Report not yet generated. Run Extract & Merge first.${RESET}"
+                    echo -e "\n${YELLOW}HTML Report not yet generated. Run Extract & Merge (Option 7) or Automated Suite (Main Menu 3) first.${RESET}"
                 fi
                 read -rp "Press Enter to return..." _
                 ;;
             6)
-                echo -e "\nSelect script transcript to view:"
+                echo -e "\nSelect transcript to view:"
+                echo -e "  ${CYAN}[0]${RESET} 🔙 Cancel (Return to Explorer Submenu)"
+                echo -e "  ${CYAN}[1]${RESET} 🧪 Master Automated Expect Suite (All 8 Test Cases)"
                 for i in "${!targets[@]}"; do
-                    echo -e "  ${CYAN}[$((i+1))]${RESET} ${targets[$i]}"
+                    echo -e "  ${CYAN}[$((i+2))]${RESET} Live Run: ${targets[$i]}"
                 done
+                local total_items=$(( ${#targets[@]} + 1 ))
                 local t_choice
-                t_choice=$(prompt_choice "Select [1-${#targets[@]}]: " 1 "${#targets[@]}")
-                local sel_t="${targets[$((t_choice - 1))]}"
-                local clean_txt="${live_base}/${sel_t%.sh}/session_transcript_clean.txt"
-                if [ -f "$clean_txt" ]; then
-                    cat "$clean_txt" | less -R || cat "$clean_txt"
+                t_choice=$(prompt_choice "Select [0-${total_items}] (or 0 to cancel): " 0 "$total_items")
+                
+                if [ "$t_choice" -eq 0 ]; then
+                    continue
+                elif [ "$t_choice" -eq 1 ]; then
+                    local auto_clean="/tmp/cumulative_${USER:-alan}_tests/session_transcript_clean.txt"
+                    if [ ! -f "$auto_clean" ]; then
+                        auto_clean="/tmp/cumulative_all_scripts/session_transcript_clean.txt"
+                    fi
+                    if [ -f "$auto_clean" ]; then
+                        echo -e "\n================ [ Automated Test Suite Transcript ] ================"
+                        cat "$auto_clean" | less -R || cat "$auto_clean"
+                    else
+                        echo -e "\n${YELLOW}No automated test transcript found. Run test suite first.${RESET}"
+                    fi
                 else
-                    echo -e "\n${YELLOW}No transcript found at ${clean_txt}${RESET}"
+                    local sel_t="${targets[$((t_choice - 2))]}"
+                    local clean_txt="${live_base}/${sel_t%.sh}/session_transcript_clean.txt"
+                    if [ -f "$clean_txt" ]; then
+                        echo -e "\n================ [ Live Run Transcript: ${sel_t} ] ================"
+                        cat "$clean_txt" | less -R || cat "$clean_txt"
+                    else
+                        echo -e "\n${YELLOW}No live transcript found at ${clean_txt}${RESET}"
+                    fi
                 fi
                 read -rp "Press Enter to return..." _
                 ;;
