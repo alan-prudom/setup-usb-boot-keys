@@ -193,7 +193,9 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 if [ "$boot_choice" = "1" ]; then
-    echo -e "\n[*] Initializing Option A: Creating transient CoW overlay for /dev/sdb..."
+    echo -e "\n[*] Flushing kernel disk buffers before snapshot..."
+    sync
+    echo -e "[*] Initializing Option A: Creating transient CoW overlay for ${USB_DEV}..."
     qemu-img create -f qcow2 -b "$USB_DEV" -F raw "$TEMP_COW" >/dev/null
     QEMU_ARGS+=(
         -drive "file=${TEMP_COW},format=qcow2,if=virtio,cache=writeback"
@@ -316,8 +318,9 @@ else
     
     # Try spawning viewer if DISPLAY is accessible
     if [ -n "$DISPLAY" ]; then
-        echo -e "[*] Spawning TigerVNC Viewer..."
-        vncviewer "localhost:${VNC_PORT}" 2>/dev/null || xtigervncviewer "localhost:${VNC_PORT}" 2>/dev/null || true &
+        echo -e "[*] Spawning TigerVNC Viewer (Auto-Fit & Dynamic Rescaling enabled)..."
+        echo -e "${DIM}  ℹ️  Tip: Press F8 in the TigerVNC window to toggle Full Screen or access Options.${RESET}"
+        vncviewer -RemoteResize=1 "localhost:${VNC_PORT}" 2>/dev/null || xtigervncviewer -RemoteResize=1 "localhost:${VNC_PORT}" 2>/dev/null || true &
     fi
     
     wait $VM_PID 2>/dev/null || true
