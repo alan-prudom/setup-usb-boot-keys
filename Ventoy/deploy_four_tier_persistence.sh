@@ -214,13 +214,10 @@ SVC_EOF
     ln -sf "/etc/systemd/system/mount-storage-startup.service" "$TDIR/etc/systemd/system/multi-user.target.wants/mount-storage-startup.service"
 
     # Enable SSH service in systemd
-    if [ -f "$TDIR/lib/systemd/system/ssh.service" ]; then
-        ln -sf "/lib/systemd/system/ssh.service" "$TDIR/etc/systemd/system/multi-user.target.wants/ssh.service"
-    elif [ -f "$TDIR/lib/systemd/system/sshd.service" ]; then
-        ln -sf "/lib/systemd/system/sshd.service" "$TDIR/etc/systemd/system/multi-user.target.wants/ssh.service"
-    else
-        ln -sf "/lib/systemd/system/ssh.service" "$TDIR/etc/systemd/system/multi-user.target.wants/ssh.service" 2>/dev/null || true
-    fi
+    ln -sf "/usr/lib/systemd/system/ssh.service" "$TDIR/etc/systemd/system/multi-user.target.wants/ssh.service" 2>/dev/null || true
+
+    # Fix display-manager.service symlink to point directly to /usr/lib/systemd/system/lightdm.service
+    ln -sf "/usr/lib/systemd/system/lightdm.service" "$TDIR/etc/systemd/system/display-manager.service" 2>/dev/null || true
 
     # B) XDG Desktop Autostart
     mkdir -p "$TDIR/etc/xdg/autostart"
@@ -297,9 +294,9 @@ TERM_RC
         fi
     fi
 
-    # 5b. Fix UsrMerge modules symlink & load nbd on boot
-    mkdir -p "$TDIR/lib" "$TDIR/etc"
-    ln -sf "/usr/lib/modules" "$TDIR/lib/modules"
+    # 5b. Ensure nbd module loads on boot (without touching /lib to prevent UsrMerge masking)
+    mkdir -p "$TDIR/etc"
+    rm -rf "$TDIR/lib" 2>/dev/null || true
     if [ ! -f "$TDIR/etc/modules" ] || ! grep -q "^nbd" "$TDIR/etc/modules"; then
         echo "nbd" >> "$TDIR/etc/modules"
     fi

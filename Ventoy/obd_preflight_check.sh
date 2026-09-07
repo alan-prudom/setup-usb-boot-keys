@@ -159,16 +159,47 @@ else
 fi
 
 echo -e "\n${BOLD}[5/5] Desktop & Display Status${RESET}"
-if [ -n "${DISPLAY:-}" ]; then
-    check_status PASS "X11 Display" "DISPLAY is set to $DISPLAY"
+# 1. UsrMerge Integrity Check
+if [ -L "/lib" ] && [ "$(readlink -f /lib)" = "/usr/lib" ]; then
+    check_status PASS "UsrMerge Integrity" "/lib correctly symlinked to /usr/lib"
+elif [ -d "/lib" ] && [ ! -L "/lib" ]; then
+    check_status FAIL "UsrMerge Integrity" "/lib is a physical directory (OverlayFS masking /usr/lib base!)"
 else
-    check_status WARN "X11 Display" "DISPLAY environment variable not set in current shell"
+    check_status PASS "UsrMerge Integrity" "Filesystem layout verified"
 fi
 
+# 2. Display Manager Target Resolution
+if [ -L "/etc/systemd/system/display-manager.service" ]; then
+    dm_target=$(readlink -f "/etc/systemd/system/display-manager.service" 2>/dev/null || true)
+    if [ -f "$dm_target" ]; then
+        check_status PASS "Display Manager Target" "Resolves cleanly to $dm_target"
+    else
+        check_status FAIL "Display Manager Target" "Broken symlink! Target does not exist: $(readlink /etc/systemd/system/display-manager.service 2>/dev/null)"
+    fi
+fi
+
+# 3. LightDM Active State
 if systemctl is-active lightdm >/dev/null 2>&1; then
     check_status PASS "LightDM Display Manager" "Active and running"
 elif command -v lightdm >/dev/null 2>&1; then
     check_status WARN "LightDM Display Manager" "Inactive (desktop GUI waiting to start)"
+fi
+
+# 4. Failed Services Audit
+if command -v systemctl >/dev/null 2>&1; then
+    failed_units=$(systemctl list-units --state=failed --no-legend 2>/dev/null | awk '{print $1}' | tr '\n' ' ' | xargs || true)
+    if [ -z "$failed_units" ]; then
+        check_status PASS "System Services Health" "Zero failed systemd units"
+    else
+        check_status WARN "System Services Health" "Failed units detected: ${failed_units}"
+    fi
+fi
+
+# 5. Current Display Variable
+if [ -n "${DISPLAY:-}" ]; then
+    check_status PASS "X11 Display" "DISPLAY is set to $DISPLAY"
+else
+    check_status WARN "X11 Display" "DISPLAY environment variable not set in current shell"
 fi
 
 echo -e "\n======================================================================"
