@@ -1,0 +1,168 @@
+#!/usr/bin/expect -f
+# ==============================================================================
+# test_zero_shortcut_navigation.exp
+# Validates that '0' is accepted across prompts as a shortcut to step back
+# one menu level or cancel without out-of-range rejection.
+# ==============================================================================
+
+set timeout 10
+set ventoy_dir "/home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy"
+
+send_user "\n=== TEST_CASE: Universal '0' Shortcut Navigation ===\n"
+
+# Test 1: host_support_hub.sh Coverage Explorer submenu allows '0' to return to Main Menu
+spawn bash "$ventoy_dir/host_support_hub.sh"
+
+expect {
+    "Select action" {
+        send_user "\nMain menu reached. Entering Submenu 5...\n"
+        send "5\r"
+    }
+    timeout {
+        send_user "\nFAIL: Timed out waiting for Host Support Hub Main Menu\n"
+        exit 1
+    }
+}
+
+expect {
+    "HOST COVERAGE, TRANSCRIPTS & ARTIFACT EXPLORER" {
+        send_user "\nIn Submenu 5. Sending '0' to go back one menu level...\n"
+    }
+    timeout {
+        send_user "\nFAIL: Timed out waiting for Coverage Submenu\n"
+        exit 1
+    }
+}
+
+expect {
+    "Select option" {
+        send "0\r"
+    }
+    timeout {
+        send_user "\nFAIL: Submenu prompt not found\n"
+        exit 1
+    }
+}
+
+# The test expects returning to the main menu WITHOUT seeing "out of range" error
+expect {
+    "out of range" {
+        send_user "\nFAIL: '0' was incorrectly rejected as out of range!\n"
+        exit 1
+    }
+    "RESCUEZILLA HOST SUPPORT & TEST ORCHESTRATOR" {
+        send_user "\nPASS: Successfully stepped back to Main Menu using '0'!\n"
+    }
+    timeout {
+        send_user "\nFAIL: Did not return to Main Menu\n"
+        exit 1
+    }
+}
+
+# Now in Main Menu, send '0' to exit
+expect {
+    "Select action" {
+        send_user "\nSending '0' to exit from Main Menu...\n"
+        send "0\r"
+    }
+    timeout { exit 1 }
+}
+
+expect {
+    "out of range" {
+        send_user "\nFAIL: '0' was incorrectly rejected as out of range on main menu!\n"
+        exit 1
+    }
+    eof {
+        send_user "\nPASS: Main Menu cleanly exited via '0'!\n"
+    }
+    timeout {
+        send_user "\nFAIL: Timed out waiting for script to exit\n"
+        exit 1
+    }
+}
+
+# Test 2: rescue_suite_launcher.sh sub-prompts allow '0' to return to Main Menu
+spawn bash "$ventoy_dir/rescue_suite_launcher.sh"
+
+expect {
+    "Enter your selection" {
+        send_user "\nStep 4: In Rescue Suite Launcher. Selecting 2 Restore Image...\n"
+        send "2\r"
+    }
+    timeout {
+        send_user "\nFAIL: Timed out waiting for Rescue Suite Launcher menu\n"
+        exit 1
+    }
+}
+
+expect {
+    "Select engine" {
+        send_user "\nStep 5: In Restore engine selection. Sending 0 to go back...\n"
+        send "0\r"
+    }
+    timeout {
+        send_user "\nFAIL: Engine selection prompt not found\n"
+        exit 1
+    }
+}
+
+expect {
+    "out of range" {
+        send_user "\nFAIL: '0' rejected in launcher engine prompt!\n"
+        exit 1
+    }
+    "Core Operations" {
+        send_user "\nPASS: Stepped back to Rescue Suite Launcher Main Menu via '0'!\n"
+    }
+    timeout {
+        send_user "\nFAIL: Did not return to Rescue Suite Launcher Main Menu\n"
+        exit 1
+    }
+}
+
+expect {
+    "Enter your selection" {
+        send_user "\nStep 6: Sending 0 to exit Rescue Suite Launcher...\n"
+        send "0\r"
+    }
+    timeout { exit 1 }
+}
+
+expect {
+    "Exiting rescue suite" {
+        send_user "\nPASS: Rescue Suite Launcher cleanly exited via '0'!\n"
+    }
+    timeout { exit 1 }
+}
+
+# Test 3: run_rescuezilla_backup_cli.sh drive prompt allows '0' to cancel & exit
+spawn bash "$ventoy_dir/run_rescuezilla_backup_cli.sh"
+
+expect {
+    "Select drive to backup" {
+        send_user "\nStep 7: In Backup CLI drive prompt. Sending 0 to cancel & exit...\n"
+        send "0\r"
+    }
+    timeout {
+        send_user "\nFAIL: Timed out waiting for Backup CLI drive prompt\n"
+        exit 1
+    }
+}
+
+expect {
+    "out of range" {
+        send_user "\nFAIL: '0' rejected in backup cli drive prompt!\n"
+        exit 1
+    }
+    "Operation cancelled by user" {
+        send_user "\nPASS: Backup CLI cleanly cancelled & exited via '0'!\n"
+    }
+    timeout {
+        send_user "\nFAIL: Backup CLI did not cancel cleanly\n"
+        exit 1
+    }
+}
+
+send_user "\n=== ALL UNIVERSAL '0' NAVIGATION TESTS PASSED ===\n"
+exit 0

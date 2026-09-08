@@ -1,6 +1,7 @@
 chats.md
 # Ignore test HTML and raw media assets
 Ventoy/tests/results/
+Ventoy/coverage_results/
 *.png
 *.dat
 boot_cache/

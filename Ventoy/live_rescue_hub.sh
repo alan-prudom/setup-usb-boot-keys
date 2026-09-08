@@ -38,6 +38,16 @@ for cand in "/home/ubuntu/ntfs_usb/live_coverage" "/media/ubuntu/2C95D29B2DF0500
 done
 COV_BASE="${COV_BASE:-/tmp/live_coverage}"
 
+# Python execution resolver (prefers uv if available)
+PYTHON_CMD="python3"
+if command -v uv >/dev/null 2>&1; then
+    PYTHON_CMD="uv run python"
+elif command -v python3 >/dev/null 2>&1; then
+    PYTHON_CMD="python3"
+elif command -v python >/dev/null 2>&1; then
+    PYTHON_CMD="python"
+fi
+
 prompt_choice() {
     local prompt_msg="$1"
     local min_val="$2"
@@ -48,19 +58,19 @@ prompt_choice() {
         read -r choice
         choice="$(echo "$choice" | xargs)"
         if [ -z "$choice" ]; then
-            echo -e "  ${YELLOW}⚠️  Empty input (Return key) is not accepted. Please type a number between ${min_val} and ${max_val}.${RESET}" >&2
+            echo -e "  ${YELLOW}⚠️  Empty input (Return key) is not accepted. Please type a number between ${min_val} and ${max_val} (or 0).${RESET}" >&2
             continue
         fi
         case "$choice" in
             *[!0-9]*|"")
-                echo -e "  ${RED}⚠️  Invalid input '$choice'. Please type a number between ${min_val} and ${max_val}.${RESET}" >&2
+                echo -e "  ${RED}⚠️  Invalid input '$choice'. Please type a number between ${min_val} and ${max_val} (or 0).${RESET}" >&2
                 ;;
             *)
-                if [ "$choice" -ge "$min_val" ] && [ "$choice" -le "$max_val" ]; then
+                if { [ "$choice" -ge "$min_val" ] && [ "$choice" -le "$max_val" ]; } || [ "$choice" -eq 0 ]; then
                     echo "$choice"
                     return 0
                 else
-                    echo -e "  ${RED}⚠️  Option '$choice' out of range [${min_val}-${max_val}].${RESET}" >&2
+                    echo -e "  ${RED}⚠️  Option '$choice' out of range [${min_val}-${max_val}] (or 0).${RESET}" >&2
                 fi
                 ;;
         esac
@@ -191,6 +201,9 @@ manage_coverage_submenu() {
                 done
                 local t_choice
                 t_choice=$(prompt_choice "Select [1-${#targets[@]}]: " 1 "${#targets[@]}")
+                if [ "$t_choice" -eq 0 ]; then
+                    continue
+                fi
                 local sel_t="${targets[$((t_choice - 1))]}"
                 local clean_txt="${COV_BASE}/${sel_t%.sh}/session_transcript_clean.txt"
                 if [ -f "$clean_txt" ]; then
@@ -208,6 +221,9 @@ manage_coverage_submenu() {
                 done
                 local p_choice
                 p_choice=$(prompt_choice "Select [1-${#targets[@]}]: " 1 "${#targets[@]}")
+                if [ "$p_choice" -eq 0 ]; then
+                    continue
+                fi
                 local sel_p="${targets[$((p_choice - 1))]}"
                 rm -rf "${COV_BASE}/${sel_p%.sh}"
                 echo -e "\n${GREEN}✓ Purged traces for ${sel_p}.${RESET}"
@@ -229,7 +245,7 @@ manage_coverage_submenu() {
                     local sdir="${COV_BASE}/${sname%.sh}"
                     if [ -f "${sdir}/trace.log" ]; then
                         echo "  • Processing ${sname}..."
-                        python3 - << PY_RECOMP
+                        $PYTHON_CMD - << PY_RECOMP
 import os, re
 sdir = "${sdir}"
 tlog = os.path.join(sdir, "trace.log")
@@ -243,12 +259,14 @@ if os.path.exists(tlog):
                 fp = os.path.abspath(m.group(1))
                 ln = int(m.group(2))
                 if os.path.isfile(fp):
-                    file_lines.setdefault(fp, set()).add(ln)
+                    if fp not in file_lines:
+                        file_lines[fp] = {}
+                    file_lines[fp][ln] = file_lines[fp].get(ln, 0) + 1
 for fp in file_lines:
     with open(fp, "r", errors="ignore") as sf:
         sl = sf.readlines()
     branches = []
-    ex = file_lines[fp]
+    ex = set(file_lines[fp].keys())
     for idx, raw in enumerate(sl, start=1):
         l = raw.strip()
         if l.startswith("if ") or l.startswith("elif "):
@@ -269,7 +287,8 @@ with open(lpath, "w") as out:
         for ln, c in enumerate(sl, start=1):
             if not c.strip() or c.strip().startswith("#"): continue
             tot += 1
-            out.write(f"DA:{ln},{1 if ln in file_lines[fp] else 0}\n")
+            hits = file_lines[fp].get(ln, 0)
+            out.write(f"DA:{ln},{hits}\n")
         out.write(f"LF:{tot}\nLH:{len(file_lines[fp])}\n")
         brs = file_branches.get(fp, [])
         if brs:
@@ -283,7 +302,7 @@ PY_RECOMP
                 echo -e "${GREEN}✓ LCOV regeneration complete.${RESET}"
                 sleep 2
                 ;;
-            9)
+            0|9)
                 return 0
                 ;;
         esac
@@ -330,7 +349,7 @@ main_menu() {
             echo -e "  ${CYAN}[8]${RESET} ⚡ Toggle Instrumentation Mode (Currently: ${DIM}OFF${RESET} -> Switch to ${GREEN}ON${RESET})"
         fi
         echo -e "  ${CYAN}[9]${RESET} 📊 Manage Traces, Text Transcripts & Staleness Submenu"
-        echo -e "\n  ${CYAN}[10]${RESET} 🚪 Exit to Shell"
+        echo -e "\n  ${CYAN}[10]${RESET} 🚪 Exit to Shell (or 0)"
         echo "======================================================================"
 
         local choice
@@ -355,7 +374,7 @@ main_menu() {
                 sleep 1
                 ;;
             9) manage_coverage_submenu ;;
-            10)
+            0|10)
                 echo -e "\nExiting Rescue Hub. Goodbye!"
                 exit 0
                 ;;

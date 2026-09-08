@@ -86,19 +86,19 @@ prompt_choice() {
         read -r choice
         choice="$(echo "$choice" | xargs)"
         if [ -z "$choice" ]; then
-            echo -e "  ${YELLOW}⚠️  Empty input (Return key) rejected. Type a number between ${min_val} and ${max_val}.${RESET}" >&2
+            echo -e "  ${YELLOW}⚠️  Empty input (Return key) rejected. Type a number between ${min_val} and ${max_val} (or 0).${RESET}" >&2
             continue
         fi
         case "$choice" in
             *[!0-9]*|"")
-                echo -e "  ${RED}⚠️  Invalid input '$choice'. Please type a number between ${min_val} and ${max_val}.${RESET}" >&2
+                echo -e "  ${RED}⚠️  Invalid input '$choice'. Please type a number between ${min_val} and ${max_val} (or 0).${RESET}" >&2
                 ;;
             *)
-                if [ "$choice" -ge "$min_val" ] && [ "$choice" -le "$max_val" ]; then
+                if { [ "$choice" -ge "$min_val" ] && [ "$choice" -le "$max_val" ]; } || [ "$choice" -eq 0 ]; then
                     echo "$choice"
                     return 0
                 else
-                    echo -e "  ${RED}⚠️  Invalid option '$choice'. Please type a number between ${min_val} and ${max_val}.${RESET}" >&2
+                    echo -e "  ${RED}⚠️  Invalid option '$choice'. Please type a number between ${min_val} and ${max_val} (or 0).${RESET}" >&2
                 fi
                 ;;
         esac
@@ -204,7 +204,9 @@ while true; do
             echo -e "  ${CYAN}[1]${RESET} Clonezilla Native CLI (ocs-sr restoreparts / restoredisk)"
             echo -e "  ${CYAN}[2]${RESET} Rescuezilla GUI Guided Restore"
             r_eng=$(prompt_choice "  Select engine [1-2]: " 1 2)
-            if [ "$r_eng" = "1" ]; then
+            if [ "$r_eng" = "0" ]; then
+                continue
+            elif [ "$r_eng" = "1" ]; then
                 echo -e "\n${BOLD}Starting Clonezilla interactive restore wizard...${RESET}"
                 sudo ocs-sr -g auto -e1 auto -e2 -c -j2 -p true restoredisk
             else
@@ -223,7 +225,9 @@ while true; do
             echo -e "  ${CYAN}[1]${RESET} Clonezilla Native Clone Wizard (ocs-onthefly)"
             echo -e "  ${CYAN}[2]${RESET} Rescuezilla GUI Clone Wizard"
             c_eng=$(prompt_choice "  Select engine [1-2]: " 1 2)
-            if [ "$c_eng" = "1" ]; then
+            if [ "$c_eng" = "0" ]; then
+                continue
+            elif [ "$c_eng" = "1" ]; then
                 sudo ocs-onthefly
             else
                 if command -v rescuezillapy >/dev/null 2>&1; then
@@ -242,7 +246,9 @@ while true; do
             echo -e "\n  ${CYAN}[1]${RESET} Clonezilla Native Verify (ocs-chkimg)"
             echo -e "  ${CYAN}[2]${RESET} Rescuezilla GUI Verify Tool"
             v_eng=$(prompt_choice "  Select verify method [1-2]: " 1 2)
-            if [ "$v_eng" = "1" ]; then
+            if [ "$v_eng" = "0" ]; then
+                continue
+            elif [ "$v_eng" = "1" ]; then
                 echo -en "  Enter image directory name to verify: "
                 read -r img_name
                 if [ -n "$img_name" ] && [ -d "/home/partimag/$img_name" ]; then
@@ -268,6 +274,9 @@ while true; do
             echo -e "\n  ${CYAN}[1]${RESET} Select and Mount Specific Image (CLI + File Browser)"
             echo -e "  ${CYAN}[2]${RESET} Open Native Rescuezilla GUI Wizard"
             exp_choice=$(prompt_choice "  Select mode [1-2]: " 1 2)
+            if [ "$exp_choice" = "0" ]; then
+                continue
+            fi
 
             if [ "$exp_choice" = "1" ] && command -v rescuezillapy >/dev/null 2>&1; then
                 mapfile -t img_list < <(find /home/partimag -maxdepth 1 -mindepth 1 -type d -exec basename {} \; 2>/dev/null | sort)
@@ -283,6 +292,9 @@ while true; do
                         idx=$((idx + 1))
                     done
                     sel_idx=$(prompt_choice "  Select image to explore [1-${#img_list[@]}]: " 1 "${#img_list[@]}")
+                    if [ "$sel_idx" = "0" ]; then
+                        continue
+                    fi
                     selected_img="${img_list[$((sel_idx - 1))]}"
                     mount_dest="/mnt/image_explorer_${selected_img}"
                     sudo mkdir -p "$mount_dest"

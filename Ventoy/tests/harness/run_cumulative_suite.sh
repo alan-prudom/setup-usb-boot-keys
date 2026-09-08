@@ -84,8 +84,8 @@ if os.path.exists(trace_path):
                 lineno = int(m.group(2))
                 if os.path.isfile(fpath) and "Ventoy" in fpath and not "tests" in fpath:
                     if fpath not in file_lines:
-                        file_lines[fpath] = set()
-                    file_lines[fpath].add(lineno)
+                        file_lines[fpath] = {}
+                    file_lines[fpath][lineno] = file_lines[fpath].get(lineno, 0) + 1
 
 for fpath in list(file_lines.keys()):
     try:
@@ -95,7 +95,7 @@ for fpath in list(file_lines.keys()):
         continue
 
     branches = []
-    executed = file_lines[fpath]
+    executed = set(file_lines[fpath].keys())
     in_case = False
     branch_num = 0
 
@@ -133,7 +133,7 @@ with open(lcov_path, "w") as out:
             if not code_strip or code_strip.startswith("#"):
                 continue
             total_lines += 1
-            hits = 1 if lnum in file_lines[fpath] else 0
+            hits = file_lines[fpath].get(lnum, 0)
             out.write(f"DA:{lnum},{hits}\n")
         hits_count = len(file_lines[fpath])
         out.write(f"LF:{total_lines}\nLH:{hits_count}\n")

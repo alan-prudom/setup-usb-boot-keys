@@ -41,7 +41,7 @@ prompt_yes_no() {
     done
 }
 
-# Rejects empty Return / Enter key; requires an integer within range
+# Rejects empty Return / Enter key; requires an integer within range (or 0)
 prompt_choice() {
     local prompt_msg="$1"
     local min_val="$2"
@@ -52,14 +52,14 @@ prompt_choice() {
         read -r choice
         choice="$(echo "$choice" | xargs)"
         if [ -z "$choice" ]; then
-            echo -e "  ${YELLOW}⚠️  Empty input (Return key) is not accepted. Please type a number between ${min_val} and ${max_val}.${RESET}" >&2
+            echo -e "  ${YELLOW}⚠️  Empty input (Return key) is not accepted. Please type a number between ${min_val} and ${max_val} (or 0).${RESET}" >&2
             continue
         fi
-        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge "$min_val" ] && [ "$choice" -le "$max_val" ]; then
+        if { [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge "$min_val" ] && [ "$choice" -le "$max_val" ]; } || [ "$choice" = "0" ]; then
             echo "$choice"
             return 0
         else
-            echo -e "  ${RED}⚠️  Invalid option '$choice'. Please type a number between ${min_val} and ${max_val}.${RESET}" >&2
+            echo -e "  ${RED}⚠️  Invalid option '$choice'. Please type a number between ${min_val} and ${max_val} (or 0).${RESET}" >&2
         fi
     done
 }
@@ -160,6 +160,10 @@ for i in "${!DISCOVERED_DRIVES[@]}"; do
 done
 
 drive_idx=$(prompt_choice "Select drive to backup [1-${#DISCOVERED_DRIVES[@]}]: " 1 "${#DISCOVERED_DRIVES[@]}")
+if [ "$drive_idx" = "0" ]; then
+    echo -e "\n${YELLOW}Operation cancelled by user. Returning to menu...${RESET}"
+    exit 0
+fi
 TARGET_DRIVE="${DISCOVERED_DRIVES[$((drive_idx - 1))]}"
 
 # Determine default drive tag for backup folder naming

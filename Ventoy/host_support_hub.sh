@@ -26,6 +26,16 @@ RESULTS_DIR="${SCRIPT_DIR}/tests/results"
 HTML_REPORT="${RESULTS_DIR}/merged_html/index.html"
 MERGED_INFO="${RESULTS_DIR}/merged_cumulative_with_live.info"
 
+# Python execution resolver (prefers uv if available)
+PYTHON_CMD="python3"
+if command -v uv >/dev/null 2>&1; then
+    PYTHON_CMD="uv run python"
+elif command -v python3 >/dev/null 2>&1; then
+    PYTHON_CMD="python3"
+elif command -v python >/dev/null 2>&1; then
+    PYTHON_CMD="python"
+fi
+
 prompt_choice() {
     local prompt_msg="$1"
     local min_val="$2"
@@ -36,19 +46,19 @@ prompt_choice() {
         read -r choice
         choice="$(echo "$choice" | xargs)"
         if [ -z "$choice" ]; then
-            echo -e "  ${YELLOW}⚠️  Empty input (Return key) rejected. Type a number between ${min_val} and ${max_val}.${RESET}" >&2
+            echo -e "  ${YELLOW}⚠️  Empty input (Return key) rejected. Type a number between ${min_val} and ${max_val} (or 0).${RESET}" >&2
             continue
         fi
         case "$choice" in
             *[!0-9]*|"")
-                echo -e "  ${RED}⚠️  Invalid input '$choice'. Please type a number between ${min_val} and ${max_val}.${RESET}" >&2
+                echo -e "  ${RED}⚠️  Invalid input '$choice'. Please type a number between ${min_val} and ${max_val} (or 0).${RESET}" >&2
                 ;;
             *)
-                if [ "$choice" -ge "$min_val" ] && [ "$choice" -le "$max_val" ]; then
+                if { [ "$choice" -ge "$min_val" ] && [ "$choice" -le "$max_val" ]; } || [ "$choice" -eq 0 ]; then
                     echo "$choice"
                     return 0
                 else
-                    echo -e "  ${RED}⚠️  Option '$choice' out of range [${min_val}-${max_val}].${RESET}" >&2
+                    echo -e "  ${RED}⚠️  Option '$choice' out of range [${min_val}-${max_val}] (or 0).${RESET}" >&2
                 fi
                 ;;
         esac
@@ -124,7 +134,7 @@ manage_host_coverage_submenu() {
             # 2. Check automated test suite metrics
             if [ -f "$auto_cov" ]; then
                 local auto_stats
-                auto_stats=$(python3 -c "
+                auto_stats=$($PYTHON_CMD -c "
 import os
 target = '$sname'
 cov_file = '$auto_cov'
@@ -267,7 +277,7 @@ if lf > 0:
                 fi
                 sleep 1
                 ;;
-            9)
+            0|9)
                 return 0
                 ;;
         esac
@@ -380,7 +390,7 @@ main_menu() {
                 bash "${SCRIPT_DIR}/obd_preflight_check.sh"
                 read -rp "Press Enter to return to menu..." _
                 ;;
-            9)
+            0|9)
                 echo -e "\nExiting Host Hub. Goodbye!"
                 exit 0
                 ;;
