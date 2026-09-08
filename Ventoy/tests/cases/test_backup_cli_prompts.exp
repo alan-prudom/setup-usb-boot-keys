@@ -125,6 +125,14 @@ expect {
 expect {
     "Empty response (Return key) is not accepted" {
         send_user "\nPASS: Branch verified: Empty Return key rejected on confirmation.\n"
+        send "invalid_entry\r"
+    }
+    timeout { exit 1 }
+}
+
+expect {
+    "Invalid input 'invalid_entry'" {
+        send_user "\nPASS: Branch verified: Invalid input rejected on prompt_yes_no.\n"
         send "n\r"
     }
     timeout { exit 1 }

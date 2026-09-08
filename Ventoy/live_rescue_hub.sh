@@ -283,15 +283,32 @@ with open(lpath, "w") as out:
         out.write(f"TN:\nSF:{fp}\n")
         with open(fp, "r", errors="ignore") as sf:
             sl = sf.readlines()
+        funcs = []
+        for idx, raw in enumerate(sl, start=1):
+            m = re.match(r"^([a-zA-Z0-9_-]+)\s*\(\)\s*\{?", raw.strip())
+            if m: funcs.append((idx, m.group(1)))
+        fheaders = {ln for ln, _ in funcs}
+        fnhits = 0
+        for ln, fn in funcs:
+            bhit = 0
+            for tln in range(ln + 1, min(ln + 10, len(sl) + 1)):
+                if tln in file_lines[fp]:
+                    bhit = file_lines[fp][tln]
+                    break
+            out.write(f"FN:{ln},{fn}\n")
+            out.write(f"FNDA:{bhit},{fn}\n")
+            if bhit > 0: fnhits += 1
+        if funcs:
+            out.write(f"FNF:{len(funcs)}\nFNH:{fnhits}\n")
         tot = 0
         non_exec = {"fi", "done", "else", "do", "then", "esac", "{", "}", ";;", "in"}
         for ln, c in enumerate(sl, start=1):
             cs = c.strip()
-            if not cs or cs.startswith("#") or cs in non_exec: continue
+            if not cs or cs.startswith("#") or cs in non_exec or ln in fheaders: continue
             tot += 1
             hits = file_lines[fp].get(ln, 0)
             out.write(f"DA:{ln},{hits}\n")
-        hits_cnt = sum(1 for ln in file_lines[fp] if sl[ln - 1].strip() not in non_exec and not sl[ln - 1].strip().startswith("#"))
+        hits_cnt = sum(1 for ln in file_lines[fp] if sl[ln - 1].strip() not in non_exec and not sl[ln - 1].strip().startswith("#") and ln not in fheaders)
         out.write(f"LF:{tot}\nLH:{hits_cnt}\n")
         brs = file_branches.get(fp, [])
         if brs:

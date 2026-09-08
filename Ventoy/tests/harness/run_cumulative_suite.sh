@@ -74,6 +74,7 @@ trace_path = "$MASTER_TRACE"
 out_dir = "$OUT_DIR"
 file_lines = {}
 file_branches = {}
+file_functions = {}
 
 if os.path.exists(trace_path):
     with open(trace_path, "r", errors="ignore") as f:
@@ -121,22 +122,49 @@ for fpath in list(file_lines.keys()):
 
     file_branches[fpath] = branches
 
+    # Discover function declarations
+    funcs = []
+    for idx, raw_line in enumerate(src_lines, start=1):
+        m = re.match(r"^([a-zA-Z0-9_-]+)\s*\(\)\s*\{?", raw_line.strip())
+        if m:
+            funcs.append((idx, m.group(1)))
+    file_functions[fpath] = funcs
+
 lcov_path = os.path.join(out_dir, "coverage.info")
 with open(lcov_path, "w") as out:
     for fpath in file_lines:
         out.write(f"TN:\nSF:{fpath}\n")
         with open(fpath, "r", errors="ignore") as src:
             src_lines = src.readlines()
+
+        funcs = file_functions.get(fpath, [])
+        func_headers = {lnum for lnum, _ in funcs}
+        fn_hits = 0
+        for lnum, fname in funcs:
+            # Check if any line in the body after the declaration ran
+            # Determine body start: next executable line
+            body_hit = 0
+            for test_ln in range(lnum + 1, min(lnum + 10, len(src_lines) + 1)):
+                if test_ln in file_lines[fpath]:
+                    body_hit = file_lines[fpath][test_ln]
+                    break
+            out.write(f"FN:{lnum},{fname}\n")
+            out.write(f"FNDA:{body_hit},{fname}\n")
+            if body_hit > 0:
+                fn_hits += 1
+        if funcs:
+            out.write(f"FNF:{len(funcs)}\nFNH:{fn_hits}\n")
+
         total_lines = 0
         non_exec = {"fi", "done", "else", "do", "then", "esac", "{", "}", ";;", "in"}
         for lnum, code in enumerate(src_lines, start=1):
             code_strip = code.strip()
-            if not code_strip or code_strip.startswith("#") or code_strip in non_exec:
+            if not code_strip or code_strip.startswith("#") or code_strip in non_exec or lnum in func_headers:
                 continue
             total_lines += 1
             hits = file_lines[fpath].get(lnum, 0)
             out.write(f"DA:{lnum},{hits}\n")
-        hits_count = sum(1 for lnum in file_lines[fpath] if src_lines[lnum - 1].strip() not in non_exec and not src_lines[lnum - 1].strip().startswith("#"))
+        hits_count = sum(1 for lnum in file_lines[fpath] if src_lines[lnum - 1].strip() not in non_exec and not src_lines[lnum - 1].strip().startswith("#") and lnum not in func_headers)
         out.write(f"LF:{total_lines}\nLH:{hits_count}\n")
 
         branches = file_branches.get(fpath, [])

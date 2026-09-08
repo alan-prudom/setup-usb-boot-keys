@@ -40,8 +40,12 @@ prompt_yes_no() {
             continue
         fi
         case "$answer" in
-            y|yes) return 0 ;;
-            n|no)  return 1 ;;
+            y|yes)
+                return 0
+                ;;
+            n|no)
+                return 1
+                ;;
             *)
                 echo -e "  ${RED}⚠️  Invalid input '$answer'. Please type 'y' (yes) or 'n' (no).${RESET}"
                 ;;
