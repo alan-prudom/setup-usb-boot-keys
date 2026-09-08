@@ -237,7 +237,7 @@ sudo bash run_test_vm.sh --boot 1 --display 2 --storage 1 # Safe CoW VM test wit
 sudo bash run_test_vm.sh --boot 1 --display 1 --storage 1 # Safe CoW VM test with Native GTK Window
 
 # --- 6. RUN CUMULATIVE AUTOMATED EXPECT SUITE ---
-bash tests/harness/run_cumulative_suite.sh /tmp/cumulative_all_scripts # 8 automated test cases
+bash tests/harness/run_cumulative_suite.sh /tmp/cumulative_all_scripts # all automated test cases (dynamically discovered)
 
 # --- 7. NTFS FIX & MOUNT ---
 sudo ntfsfix -d /dev/sdb4                       # Clear NTFS dirty/hibernation bit

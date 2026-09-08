@@ -222,7 +222,9 @@ if lf > 0:
             6)
                 echo -e "\nSelect transcript to view:"
                 echo -e "  ${CYAN}[0]${RESET} 🔙 Cancel (Return to Explorer Submenu)"
-                echo -e "  ${CYAN}[1]${RESET} 🧪 Master Automated Expect Suite (All 11 Test Cases)"
+                local test_case_count
+                test_case_count=$(find "${SCRIPT_DIR}/tests/cases" -maxdepth 1 -name "*.exp" 2>/dev/null | wc -l)
+                echo -e "  ${CYAN}[1]${RESET} 🧪 Master Automated Expect Suite (All ${test_case_count} Test Cases)"
                 for i in "${!targets[@]}"; do
                     echo -e "  ${CYAN}[$((i+2))]${RESET} Live Run: ${targets[$i]}"
                 done
@@ -328,7 +330,9 @@ main_menu() {
         echo -e "  ${CYAN}[1]${RESET} 🖥️  Launch QEMU Test VM (Interactive Selection: Option A or B)"
         echo -e "  ${CYAN}[2]${RESET} ⚡ Fast-Launch Option B Direct Persistence VM (with GTK display)"
         echo -e "\n${BOLD}Testing & Coverage Pipeline:${RESET}"
-        echo -e "  ${CYAN}[3]${RESET} 🧪 Run Master Cumulative Automated Expect Suite (9 Test Cases)"
+        local test_case_count
+        test_case_count=$(find "${SCRIPT_DIR}/tests/cases" -maxdepth 1 -name "*.exp" 2>/dev/null | wc -l)
+        echo -e "  ${CYAN}[3]${RESET} 🧪 Run Master Cumulative Automated Expect Suite (${test_case_count} Test Cases)"
         echo -e "  ${CYAN}[4]${RESET} 📥 Extract Live Coverage & Transcripts from Partition 4 / VM"
         echo -e "  ${CYAN}[5]${RESET} 📊 Coverage & Artifact Explorer (Submenu: HTML, Transcripts, Staleness)"
         if [ "$imode" = "1" ]; then
