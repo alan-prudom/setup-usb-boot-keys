@@ -7,12 +7,12 @@ Previously, submenus across the launcher scripts used different mechanisms to re
 
 ### Implementation
 - Added `'0'` as a universal shortcut to return to the previous menu level across:
-  - [`host_support_hub.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/scripts/host_support_hub.sh)
-  - [`live_rescue_hub.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/scripts/live_rescue_hub.sh)
-  - [`rescue_suite_launcher.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/scripts/rescue_suite_launcher.sh)
-  - [`run_rescuezilla_backup_cli.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/scripts/run_rescuezilla_backup_cli.sh)
+  - [`host_support_hub.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/host_support_hub.sh)
+  - [`live_rescue_hub.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/live_rescue_hub.sh)
+  - [`rescue_suite_launcher.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/rescue_suite_launcher.sh)
+  - [`run_rescuezilla_backup_cli.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/run_rescuezilla_backup_cli.sh)
 - Preserved existing numeric options (e.g., option `4` or `5` to return/exit) for backwards compatibility.
-- Adopted strict TDD methodology: created failing test [`test_zero_shortcut_navigation.exp`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/tests/expect/test_zero_shortcut_navigation.exp) first, then implemented the feature until tests passed.
+- Adopted strict TDD methodology: created failing test [`test_zero_shortcut_navigation.exp`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/tests/cases/test_zero_shortcut_navigation.exp) first, then implemented the feature until tests passed.
 
 ---
 
@@ -25,7 +25,7 @@ When analyzing coverage reports generated from `kcov` execution traces, consecut
 
 ### Resolution
 - **Cumulative Hit Counting**: Updated coverage processing to accumulate integer execution frequencies (`DA:<line_num>,<hit_count>`).
-- **Non-Executable Token Filtering**: Enhanced regex rules in [`generate_lcov_report.py`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/tests/harness/generate_lcov_report.py) to ignore lines containing only bash grammar tokens and block delimiters.
+- **Non-Executable Token Filtering**: Enhanced regex rules in [`tests/harness/run_cumulative_suite.sh and run_with_coverage.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/tests/harness/run_cumulative_suite.sh) to ignore lines containing only bash grammar tokens and block delimiters.
 - **Python Execution Fallback**: Standardized test harness execution to `uv run python` with automatic fallback to system `python3` or `python`.
 
 ---
@@ -33,14 +33,14 @@ When analyzing coverage reports generated from `kcov` execution traces, consecut
 ## 3. Bash Function Coverage Tracking
 
 ### Implementation
-- Added a full function definition parser in [`generate_lcov_report.py`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/tests/harness/generate_lcov_report.py) using the LCOV function specification:
+- Added a full function definition parser in [`tests/harness/run_cumulative_suite.sh and run_with_coverage.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/tests/harness/run_cumulative_suite.sh) using the LCOV function specification:
   - `FN:<line_number>,<function_name>`
   - `FNDA:<call_count>,<function_name>`
   - `FNF:<total_functions_found>`
   - `FNH:<functions_hit>`
 - Parser supports standard Bash function patterns (`function foo { ... }` and `foo() { ... }`).
 - Function execution is credited when the first executable statement within the function's scope is hit.
-- Result: Function coverage increased across the suite (70.6% across the entire test suite, reaching 100% on [`run_rescuezilla_backup_cli.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/scripts/run_rescuezilla_backup_cli.sh)).
+- Result: Function coverage increased across the suite (70.6% across the entire test suite, reaching 100% on [`run_rescuezilla_backup_cli.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/run_rescuezilla_backup_cli.sh)).
 
 ---
 
@@ -56,3 +56,9 @@ When analyzing coverage reports generated from `kcov` execution traces, consecut
 - Suite runner: [`run_cumulative_suite.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/tests/harness/run_cumulative_suite.sh)
 - Results: **12 / 12 tests passed** (100% pass rate).
 - HTML Report: Viewable at `/tmp/cumulative_alan_tests/html/index.html`.
+
+---
+
+## 6. Dynamic Test Case Discovery in Menus
+- Updated [`host_support_hub.sh`](file:///home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/host_support_hub.sh) to query the test cases directory dynamically (`find "${SCRIPT_DIR}/tests/cases" -maxdepth 1 -name "*.exp" | wc -l`) rather than displaying a hardcoded count.
+- Ensures menu items automatically scale as new regression tests are added without manual edits to display strings.
