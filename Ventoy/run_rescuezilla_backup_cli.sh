@@ -26,7 +26,9 @@ prompt_yes_no() {
     while true; do
         echo -en "${prompt_msg}"
         read -r answer
-        answer="$(echo "$answer" | tr '[:upper:]' '[:lower:]' | xargs)"
+        answer="${answer,,}"
+        answer="${answer#"${answer%%[![:space:]]*}"}"
+        answer="${answer%"${answer##*[![:space:]]}"}"
         if [ -z "$answer" ]; then
             echo -e "  ${YELLOW}⚠️  Empty response (Return key) is not accepted. You must explicitly type 'y' or 'n'.${RESET}"
             continue

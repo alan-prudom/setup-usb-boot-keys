@@ -234,7 +234,7 @@ def analyze_script(filename: str, source_text: str) -> List[LinterViolation]:
                 )
 
         # 4. Check chained commands inside subshell assignments: VAR="$(cmd1 && cmd2)"
-        subshell_chained = re.search(r'=\s*["\']?\$\([^)]*(&&|\|\||;)[^)]*\)', line)
+        subshell_chained = re.search(r'=\s*["\']?\$\([^)]*(&&|\|\||;|\|)[^)]*\)', line)
         if subshell_chained:
             violations.append(
                 LinterViolation(
