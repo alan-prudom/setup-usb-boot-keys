@@ -26,11 +26,7 @@ prompt_yes_no() {
     while true; do
         echo -en "${prompt_msg}"
         read -r answer
-        answer=$(
-            echo "$answer" |
-            tr '[:upper:]' '[:lower:]' |
-            xargs
-        )
+        answer="$(echo "$answer" | tr '[:upper:]' '[:lower:]' | xargs)"
         if [ -z "$answer" ]; then
             echo -e "  ${YELLOW}⚠️  Empty response (Return key) is not accepted. You must explicitly type 'y' or 'n'.${RESET}"
             continue
@@ -58,10 +54,7 @@ prompt_choice() {
     while true; do
         echo -en "${prompt_msg}" >&2
         read -r choice
-        choice=$(
-            echo "$choice" |
-            xargs
-        )
+        choice="$(echo "$choice" | xargs)"
         if [ -z "$choice" ]; then
             echo -e "  ${YELLOW}⚠️  Empty input (Return key) is not accepted. Please type a number between ${min_val} and ${max_val} (or 0).${RESET}" >&2
             continue

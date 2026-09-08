@@ -19,7 +19,7 @@ from typing import Dict, List, Set, Tuple
 
 
 class LcovGenerator:
-    DEFAULT_NON_EXEC = {"fi", "done", "else", "do", "then", "esac", "{", "}", ";;", "in"}
+    DEFAULT_NON_EXEC = {"fi", "done", "else", "do", "then", "esac", "{", "}", ";;", "in", ")"}
 
     def __init__(
         self,
@@ -141,7 +141,7 @@ class LcovGenerator:
                 total_lines = 0
                 for lnum, code in enumerate(src_lines, start=1):
                     code_strip = code.strip()
-                    if not code_strip or code_strip.startswith("#") or code_strip in self.exclude_tokens or lnum in func_headers:
+                    if not code_strip or code_strip.startswith("#") or code_strip in self.exclude_tokens or lnum in func_headers or re.match(r'^[a-zA-Z0-9_]+=\($', code_strip):
                         continue
                     total_lines += 1
                     hits = self.file_lines[fpath].get(lnum, 0)
@@ -152,6 +152,7 @@ class LcovGenerator:
                     if src_lines[lnum - 1].strip() not in self.exclude_tokens
                     and not src_lines[lnum - 1].strip().startswith("#")
                     and lnum not in func_headers
+                    and not re.match(r'^[a-zA-Z0-9_]+=\($', src_lines[lnum - 1].strip())
                 )
                 out.write(f"LF:{total_lines}\nLH:{hits_count}\n")
 
