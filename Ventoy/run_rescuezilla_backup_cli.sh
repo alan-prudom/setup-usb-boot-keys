@@ -151,11 +151,27 @@ fi
 
 for i in "${!DISCOVERED_DRIVES[@]}"; do
     dev_path="${DISCOVERED_DRIVES[$i]}"
-    d_size=$(lsblk -d -n -o SIZE "$dev_path" 2>/dev/null | xargs || echo "Unknown")
-    d_model=$(lsblk -d -n -o MODEL "$dev_path" 2>/dev/null | xargs || echo "")
-    d_tran=$(lsblk -d -n -o TRAN "$dev_path" 2>/dev/null | xargs || echo "")
-    [ -z "$d_model" ] && d_model="Disk Device"
-    [ -n "$d_tran" ] && d_model="${d_model} (${d_tran})"
+    d_size=$(
+        lsblk -d -n -o SIZE "$dev_path" 2>/dev/null |
+        xargs ||
+        echo "Unknown"
+    )
+    d_model=$(
+        lsblk -d -n -o MODEL "$dev_path" 2>/dev/null |
+        xargs ||
+        echo ""
+    )
+    d_tran=$(
+        lsblk -d -n -o TRAN "$dev_path" 2>/dev/null |
+        xargs ||
+        echo ""
+    )
+    if [ -z "$d_model" ]; then
+        d_model="Disk Device"
+    fi
+    if [ -n "$d_tran" ]; then
+        d_model="${d_model} (${d_tran})"
+    fi
     echo -e "  ${CYAN}[$((i + 1))]${RESET} ${dev_path} (${d_size}, ${d_model})"
 done
 
@@ -190,12 +206,28 @@ done < <(lsblk -n -l -o NAME,TYPE "$TARGET_DRIVE" 2>/dev/null | awk '$2=="part"{
 echo -e "Available Partitions on ${TARGET_DRIVE}:"
 if [ "${#AVAILABLE_PARTS[@]}" -gt 0 ]; then
     for p in "${AVAILABLE_PARTS[@]}"; do
-        p_size=$(lsblk -n -o SIZE "/dev/$p" 2>/dev/null | xargs || echo "")
-        p_fs=$(lsblk -n -o FSTYPE "/dev/$p" 2>/dev/null | xargs || echo "")
-        p_label=$(lsblk -n -o LABEL "/dev/$p" 2>/dev/null | xargs || echo "")
+        p_size=$(
+            lsblk -n -o SIZE "/dev/$p" 2>/dev/null |
+            xargs ||
+            echo ""
+        )
+        p_fs=$(
+            lsblk -n -o FSTYPE "/dev/$p" 2>/dev/null |
+            xargs ||
+            echo ""
+        )
+        p_label=$(
+            lsblk -n -o LABEL "/dev/$p" 2>/dev/null |
+            xargs ||
+            echo ""
+        )
         p_desc="${p_size}"
-        [ -n "$p_fs" ] && p_desc="${p_desc}, ${p_fs}"
-        [ -n "$p_label" ] && p_desc="${p_desc}, label: ${p_label}"
+        if [ -n "$p_fs" ]; then
+            p_desc="${p_desc}, ${p_fs}"
+        fi
+        if [ -n "$p_label" ]; then
+            p_desc="${p_desc}, label: ${p_label}"
+        fi
         echo -e "  • ${BOLD}${p}${RESET} (${p_desc})"
     done
     echo ""

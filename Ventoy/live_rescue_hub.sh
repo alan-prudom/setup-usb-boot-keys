@@ -284,12 +284,15 @@ with open(lpath, "w") as out:
         with open(fp, "r", errors="ignore") as sf:
             sl = sf.readlines()
         tot = 0
+        non_exec = {"fi", "done", "else", "do", "then", "esac", "{", "}", ";;", "in"}
         for ln, c in enumerate(sl, start=1):
-            if not c.strip() or c.strip().startswith("#"): continue
+            cs = c.strip()
+            if not cs or cs.startswith("#") or cs in non_exec: continue
             tot += 1
             hits = file_lines[fp].get(ln, 0)
             out.write(f"DA:{ln},{hits}\n")
-        out.write(f"LF:{tot}\nLH:{len(file_lines[fp])}\n")
+        hits_cnt = sum(1 for ln in file_lines[fp] if sl[ln - 1].strip() not in non_exec and not sl[ln - 1].strip().startswith("#"))
+        out.write(f"LF:{tot}\nLH:{hits_cnt}\n")
         brs = file_branches.get(fp, [])
         if brs:
             for ln, brid, tk in brs:

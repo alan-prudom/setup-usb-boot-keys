@@ -166,14 +166,16 @@ with open(lcov_path, "w") as out:
         with open(fpath, "r", errors="ignore") as src:
             src_lines = src.readlines()
         total_lines = 0
+        non_exec = {"fi", "done", "else", "do", "then", "esac", "{", "}", ";;", "in"}
         for lnum, code in enumerate(src_lines, start=1):
             code_strip = code.strip()
-            if not code_strip or code_strip.startswith("#"):
+            if not code_strip or code_strip.startswith("#") or code_strip in non_exec:
                 continue
             total_lines += 1
             hits = file_lines[fpath].get(lnum, 0)
             out.write(f"DA:{lnum},{hits}\n")
-        out.write(f"LF:{total_lines}\nLH:{len(file_lines[fpath])}\n")
+        hits_count = sum(1 for lnum in file_lines[fpath] if src_lines[lnum - 1].strip() not in non_exec and not src_lines[lnum - 1].strip().startswith("#"))
+        out.write(f"LF:{total_lines}\nLH:{hits_count}\n")
 
         branches = file_branches.get(fpath, [])
         if branches:
