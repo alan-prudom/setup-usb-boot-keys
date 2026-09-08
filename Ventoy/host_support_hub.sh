@@ -76,6 +76,19 @@ manage_host_coverage_submenu() {
 
         echo -e "${BOLD}Current Script Staleness & Coverage Overview:${RESET}"
         local live_base="${RESULTS_DIR}/live_runs"
+        local auto_cov=""
+        for cand_cov in \
+            "/tmp/cumulative_alan_tests/coverage.info" \
+            "/tmp/cumulative_${SUDO_USER:-}/coverage.info" \
+            "/tmp/cumulative_${USER:-}/coverage.info" \
+            "/tmp/cumulative_all_scripts/coverage.info" \
+            "/tmp/cumulative_coverage/coverage.info"; do
+            if [ -f "$cand_cov" ]; then
+                auto_cov="$cand_cov"
+                break
+            fi
+        done
+
         local idx=1
         for sname in "${targets[@]}"; do
             local sfile="${SCRIPT_DIR}/${sname}"
@@ -83,6 +96,7 @@ manage_host_coverage_submenu() {
             local status="${DIM}[NO RUN RECORDED]${RESET}"
             local stats=""
 
+            # 1. Check live run first
             if [ -d "$sdir" ] && [ -f "${sdir}/metadata.env" ]; then
                 # shellcheck source=/dev/null
                 source "${sdir}/metadata.env" 2>/dev/null || true
@@ -92,9 +106,9 @@ manage_host_coverage_submenu() {
                 fi
 
                 if [ -n "$curr_sha" ] && [ "$curr_sha" = "${SCRIPT_SHA256:-}" ]; then
-                    status="${GREEN}[✓ VALID / UP TO DATE]${RESET}"
+                    status="${GREEN}[✓ LIVE - UP TO DATE]${RESET}"
                 else
-                    status="${RED}[⚠️ OUT OF DATE - MODIFIED]${RESET}"
+                    status="${YELLOW}[⚠️ LIVE - SCRIPT MODIFIED]${RESET}"
                 fi
 
                 local cov_info="${sdir}/coverage.info"
@@ -103,7 +117,42 @@ manage_host_coverage_submenu() {
                     lines_hit=$(grep -m1 "^LH:" "$cov_info" 2>/dev/null | cut -d: -f2 || echo "0")
                     local lines_total
                     lines_total=$(grep -m1 "^LF:" "$cov_info" 2>/dev/null | cut -d: -f2 || echo "0")
-                    stats="(${lines_hit}/${lines_total} lines)"
+                    stats="(${lines_hit}/${lines_total} lines, live)"
+                fi
+            fi
+
+            # 2. Check automated test suite metrics
+            if [ -f "$auto_cov" ]; then
+                local auto_stats
+                auto_stats=$(python3 -c "
+import os
+target = '$sname'
+cov_file = '$auto_cov'
+in_target = False
+lh, lf, brh, brf = 0, 0, 0, 0
+with open(cov_file) as f:
+    for line in f:
+        line = line.strip()
+        if line.startswith('SF:'):
+            in_target = (os.path.basename(line[3:]) == target)
+        elif in_target:
+            if line.startswith('LH:'): lh = int(line[3:])
+            elif line.startswith('LF:'): lf = int(line[3:])
+            elif line.startswith('BRH:'): brh = int(line[4:])
+            elif line.startswith('BRF:'): brf = int(line[4:])
+            elif line == 'end_of_record': break
+if lf > 0:
+    pct = round((lh / lf) * 100, 1)
+    print(f'({lh}/{lf} lines [{pct}%], {brh}/{brf} branches)')
+" 2>/dev/null || true)
+
+                if [ -n "$auto_stats" ]; then
+                    if [ "$status" = "${DIM}[NO RUN RECORDED]${RESET}" ]; then
+                        status="${GREEN}[✓ TEST SUITE PASS]${RESET}"
+                        stats="$auto_stats"
+                    else
+                        stats="${stats} | Test: ${auto_stats}"
+                    fi
                 fi
             fi
 
@@ -137,11 +186,19 @@ manage_host_coverage_submenu() {
                 ;;
             5)
                 local html_to_open=""
-                local user_html="/tmp/cumulative_${USER:-alan}_tests/html/index.html"
                 if [ -f "$HTML_REPORT" ]; then
                     html_to_open="$HTML_REPORT"
-                elif [ -f "$user_html" ]; then
-                    html_to_open="$user_html"
+                else
+                    for cand_h in \
+                        "/tmp/cumulative_alan_tests/html/index.html" \
+                        "/tmp/cumulative_${SUDO_USER:-}/html/index.html" \
+                        "/tmp/cumulative_${USER:-}/html/index.html" \
+                        "/tmp/cumulative_all_scripts/html/index.html"; do
+                        if [ -f "$cand_h" ]; then
+                            html_to_open="$cand_h"
+                            break
+                        fi
+                    done
                 fi
 
                 if [ -n "$html_to_open" ]; then
@@ -155,7 +212,7 @@ manage_host_coverage_submenu() {
             6)
                 echo -e "\nSelect transcript to view:"
                 echo -e "  ${CYAN}[0]${RESET} 🔙 Cancel (Return to Explorer Submenu)"
-                echo -e "  ${CYAN}[1]${RESET} 🧪 Master Automated Expect Suite (All 8 Test Cases)"
+                echo -e "  ${CYAN}[1]${RESET} 🧪 Master Automated Expect Suite (All 11 Test Cases)"
                 for i in "${!targets[@]}"; do
                     echo -e "  ${CYAN}[$((i+2))]${RESET} Live Run: ${targets[$i]}"
                 done
@@ -166,11 +223,18 @@ manage_host_coverage_submenu() {
                 if [ "$t_choice" -eq 0 ]; then
                     continue
                 elif [ "$t_choice" -eq 1 ]; then
-                    local auto_clean="/tmp/cumulative_${USER:-alan}_tests/session_transcript_clean.txt"
-                    if [ ! -f "$auto_clean" ]; then
-                        auto_clean="/tmp/cumulative_all_scripts/session_transcript_clean.txt"
-                    fi
-                    if [ -f "$auto_clean" ]; then
+                    local auto_clean=""
+                    for cand_c in \
+                        "/tmp/cumulative_alan_tests/session_transcript_clean.txt" \
+                        "/tmp/cumulative_${SUDO_USER:-}/session_transcript_clean.txt" \
+                        "/tmp/cumulative_${USER:-}/session_transcript_clean.txt" \
+                        "/tmp/cumulative_all_scripts/session_transcript_clean.txt"; do
+                        if [ -f "$cand_c" ]; then
+                            auto_clean="$cand_c"
+                            break
+                        fi
+                    done
+                    if [ -n "$auto_clean" ] && [ -f "$auto_clean" ]; then
                         echo -e "\n================ [ Automated Test Suite Transcript ] ================"
                         cat "$auto_clean" | less -R || cat "$auto_clean"
                     else
