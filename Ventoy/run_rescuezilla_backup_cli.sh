@@ -69,7 +69,9 @@ prompt_choice() {
         if [ "$choice" = "0" ]; then
             echo "$choice"
             return 0
-        elif [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge "$min_val" ] && [ "$choice" -le "$max_val" ]; then
+        elif [[ "$choice" =~ ^[0-9]+$ ]] && \
+             [ "$choice" -ge "$min_val" ] && \
+             [ "$choice" -le "$max_val" ]; then
             echo "$choice"
             return 0
         else
@@ -78,13 +80,15 @@ prompt_choice() {
     done
 }
 
-clear 2>/dev/null || true
+clear 2>/dev/null || \
+    true
 echo -e "${CYAN}======================================================================${RESET}"
 echo -e "${BOLD}       🚀 LIVE COMMAND-LINE BACKUP ASSISTANT (RESCUE/CLONE)          ${RESET}"
 echo -e "${CYAN}======================================================================${RESET}"
 
 # 1. Locate SSH Key & Load Helper Libraries
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$SCRIPT_DIR" && pwd)"
 if [ -f "${SCRIPT_DIR}/lib/lib_hardware_detect.sh" ]; then
     source "${SCRIPT_DIR}/lib/lib_hardware_detect.sh"
 elif [ -f "/scripts/lib/lib_hardware_detect.sh" ]; then
@@ -125,7 +129,8 @@ mkdir -p "$MOUNT_POINT"
 
 if mountpoint -q "$MOUNT_POINT"; then
     echo "Unmounting stale mount at $MOUNT_POINT..."
-    umount -l "$MOUNT_POINT" 2>/dev/null || true
+    umount -l "$MOUNT_POINT" 2>/dev/null || \
+        true
     sleep 1
 fi
 
@@ -371,7 +376,8 @@ set +e
 if [ "$engine_choice" = "1" ] || ! command -v rescuezillapy >/dev/null 2>&1; then
     mkdir -p /home/partimag
     if mountpoint -q /home/partimag; then
-        umount -l /home/partimag 2>/dev/null || true
+        umount -l /home/partimag 2>/dev/null || \
+            true
     fi
     mount --bind "$MOUNT_POINT" /home/partimag
 

@@ -66,7 +66,7 @@ prompt_choice() {
                 echo -e "  ${RED}⚠️  Invalid input '$choice'. Please type a number between ${min_val} and ${max_val} (or 0).${RESET}" >&2
                 ;;
             *)
-                if { [ "$choice" -ge "$min_val" ] && [ "$choice" -le "$max_val" ]; } || [ "$choice" -eq 0 ]; then
+                if ( [ "$choice" -ge "$min_val" ] && [ "$choice" -le "$max_val" ] ) || [ "$choice" -eq 0 ]; then
                     echo "$choice"
                     return 0
                 else
@@ -376,13 +376,27 @@ main_menu() {
         choice=$(prompt_choice "Select task [1-10]: " 1 10)
 
         case "$choice" in
-            1) run_script_option "${SCRIPTS_ROOT}/run_rescuezilla_backup_cli.sh" 1 ;;
-            2) run_script_option "${SCRIPTS_ROOT}/post-backup-wizard.sh" 1 ;;
-            3) run_script_option "${SCRIPTS_ROOT}/rescue_suite_launcher.sh" 1 ;;
-            4) run_script_option "${SCRIPTS_ROOT}/sda_rescue_backup.sh" 1 ;;
-            5) run_script_option "${SCRIPTS_ROOT}/obd_preflight_check.sh" 0 ;;
-            6) run_script_option "${SCRIPTS_ROOT}/mount_home40_backup.sh" 0 ;;
-            7) run_script_option "${SCRIPTS_ROOT}/export_diagnostic_bundle.sh" 0 ;;
+            1)
+                run_script_option "${SCRIPTS_ROOT}/run_rescuezilla_backup_cli.sh" 1
+                ;;
+            2)
+                run_script_option "${SCRIPTS_ROOT}/post-backup-wizard.sh" 1
+                ;;
+            3)
+                run_script_option "${SCRIPTS_ROOT}/rescue_suite_launcher.sh" 1
+                ;;
+            4)
+                run_script_option "${SCRIPTS_ROOT}/sda_rescue_backup.sh" 1
+                ;;
+            5)
+                run_script_option "${SCRIPTS_ROOT}/obd_preflight_check.sh" 0
+                ;;
+            6)
+                run_script_option "${SCRIPTS_ROOT}/mount_home40_backup.sh" 0
+                ;;
+            7)
+                run_script_option "${SCRIPTS_ROOT}/export_diagnostic_bundle.sh" 0
+                ;;
             8)
                 if [ "$imode" = "1" ]; then
                     set_instrumentation_mode "0"
@@ -393,7 +407,9 @@ main_menu() {
                 fi
                 sleep 1
                 ;;
-            9) manage_coverage_submenu ;;
+            9)
+                manage_coverage_submenu
+                ;;
             0|10)
                 echo -e "\nExiting Rescue Hub. Goodbye!"
                 exit 0

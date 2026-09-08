@@ -100,7 +100,7 @@ prompt_choice() {
                 echo -e "  ${RED}⚠️  Invalid input '$choice'. Please type a number between ${min_val} and ${max_val} (or 0).${RESET}" >&2
                 ;;
             *)
-                if { [ "$choice" -ge "$min_val" ] && [ "$choice" -le "$max_val" ]; } || [ "$choice" -eq 0 ]; then
+                if ( [ "$choice" -ge "$min_val" ] && [ "$choice" -le "$max_val" ] ) || [ "$choice" -eq 0 ]; then
                     echo "$choice"
                     return 0
                 else
