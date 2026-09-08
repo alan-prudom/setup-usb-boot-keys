@@ -11,6 +11,15 @@ TESTS_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 VENTOY_DIR="$(cd "${TESTS_DIR}/.." && pwd)"
 OUT_DIR="${1:-${VENTOY_DIR}/coverage_results}"
 
+# Self-healing clean of prior artifacts, requesting sudo if owned by root
+if [ -d "$OUT_DIR" ]; then
+    if ! rm -f "${OUT_DIR}"/* 2>/dev/null; then
+        echo -e "[1;33m⚠️  Notice: Files in ${OUT_DIR} are owned by root from a previous privileged run.[0m"
+        echo "Prompting for sudo to clean previous artifacts..."
+        sudo rm -rf "$OUT_DIR"
+    fi
+fi
+
 mkdir -p "$OUT_DIR"
 MASTER_TRACE="${OUT_DIR}/master_trace.log"
 TRANSCRIPT_RAW="${OUT_DIR}/session_transcript_raw.log"
@@ -40,6 +49,9 @@ export BASH_ENV="$COV_ENV"
 
 cleanup() {
     rm -f "$COV_ENV" 2>/dev/null || true
+    if [ -n "${SUDO_USER:-}" ] && [ -d "$OUT_DIR" ]; then
+        chown -R "${SUDO_USER}:${SUDO_USER}" "$OUT_DIR" 2>/dev/null || true
+    fi
 }
 trap cleanup EXIT
 

@@ -274,7 +274,10 @@ if lf > 0:
                 echo -en "Type 'yes' to confirm: "
                 read -r conf
                 if [ "$conf" = "yes" ]; then
-                    rm -rf "${RESULTS_DIR}"/*
+                    if ! rm -rf "${RESULTS_DIR}"/* 2>/dev/null; then
+                        echo -e "${YELLOW}⚠️  Root-owned traces detected. Requesting sudo to clean...${RESET}"
+                        sudo rm -rf "${RESULTS_DIR}"/*
+                    fi
                     echo -e "${GREEN}✓ Host results directory cleaned.${RESET}"
                 fi
                 sleep 1
