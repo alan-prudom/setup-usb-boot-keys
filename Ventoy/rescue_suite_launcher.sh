@@ -90,7 +90,8 @@ prompt_choice() {
     while true; do
         echo -en "${prompt_msg}" >&2
         read -r choice
-        choice="$(echo "$choice" | xargs)"
+        choice="${choice#"${choice%%[![:space:]]*}"}"
+        choice="${choice%"${choice##*[![:space:]]}"}"
         if [ -z "$choice" ]; then
             echo -e "  ${YELLOW}⚠️  Empty input (Return key) rejected. Type a number between ${min_val} and ${max_val} (or 0).${RESET}" >&2
             continue
