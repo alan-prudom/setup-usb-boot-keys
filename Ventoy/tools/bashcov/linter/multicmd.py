@@ -84,6 +84,8 @@ def analyze_script(filename: str, source_text: str) -> List[LinterViolation]:
         semicolon_indices = []
         double_and_indices = []
         double_or_indices = []
+        subshell_depth = 0
+        subshell_multicmd = []
 
         col = 1
         idx = 0
@@ -116,8 +118,27 @@ def analyze_script(filename: str, source_text: str) -> List[LinterViolation]:
                 col += 1
                 continue
 
-            # Outside quotes
-            if not in_single_quote and not in_double_quote and not in_c_style_for:
+            # Subshell entry: $( outside single quotes
+            if not in_single_quote and ch == '$' and idx + 1 < line_len and line[idx + 1] == '(':
+                subshell_depth += 1
+                idx += 2
+                col += 2
+                continue
+
+            # Subshell exit: ) outside single quotes when in subshell
+            if not in_single_quote and subshell_depth > 0 and ch == ')':
+                subshell_depth -= 1
+                idx += 1
+                col += 1
+                continue
+
+            # Inside subshell outside quotes: check for command chaining operators: &&, ||, ;, |
+            if not in_single_quote and not in_double_quote and subshell_depth > 0:
+                if ch == ';' or ch == '|' or ch == '&':
+                    subshell_multicmd.append((idx, col))
+
+            # Outside quotes and outside subshell
+            if not in_single_quote and not in_double_quote and not in_c_style_for and subshell_depth == 0:
                 # Comment starts
                 if ch == '#' and (idx == 0 or line[idx - 1].isspace()):
                     break
@@ -233,14 +254,14 @@ def analyze_script(filename: str, source_text: str) -> List[LinterViolation]:
                     )
                 )
 
-        # 4. Check chained commands inside subshell assignments: VAR="$(cmd1 && cmd2)"
-        subshell_chained = re.search(r'=\s*["\']?\$\([^)]*(&&|\|\||;|\|)[^)]*\)', line)
-        if subshell_chained:
+        # 4. Check chained commands inside subshells: $(cmd1 | cmd2) or $(cmd1 && cmd2)
+        if subshell_multicmd:
+            sm_idx, sm_col = subshell_multicmd[0]
             violations.append(
                 LinterViolation(
                     filename=filename,
                     lineno=lidx,
-                    col=subshell_chained.start() + 1,
+                    col=sm_col,
                     rule="MULTICMD_INLINE_SUBSHELL",
                     message="Chained commands inside subshell '$()' on one line multiply trace counts. Break subshell into multiple lines or standalone steps.",
                     line_content=line,

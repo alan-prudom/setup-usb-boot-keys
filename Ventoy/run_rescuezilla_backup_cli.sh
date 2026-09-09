@@ -107,7 +107,12 @@ if [ ! -f "$KEY_FILE" ]; then
 fi
 
 if [ ! -f "$KEY_FILE" ]; then
-    KEY_FILE=$(find /media/devmon /media/ubuntu /home/ubuntu -maxdepth 3 -name "id_rsa" 2>/dev/null | head -n 1 || echo "")
+    raw_found=""
+    if raw_found=$(find /media/devmon /media/ubuntu /home/ubuntu -maxdepth 3 -name "id_rsa" 2>/dev/null); then
+        if [ -n "$raw_found" ]; then
+            KEY_FILE=$(head -n 1 <<< "$raw_found")
+        fi
+    fi
 fi
 
 if [ -z "$KEY_FILE" ] || [ ! -f "$KEY_FILE" ]; then
@@ -150,9 +155,17 @@ DISCOVERED_DRIVES=()
 while IFS= read -r dname; do
     if [ -n "$dname" ] && [ -b "/dev/${dname}" ]; then
         # Exclude active persistence / live overlay block devices (e.g. casper-rw or backing /cow)
-        d_label=$(lsblk -lno LABEL "/dev/${dname}" 2>/dev/null | xargs || echo "")
-        d_mounts=$(lsblk -lno MOUNTPOINT "/dev/${dname}" 2>/dev/null || echo "")
-        if [ "$d_label" = "casper-rw" ] || echo "$d_mounts" | grep -qE "^/cow$"; then
+        d_label=""
+        if raw_label=$(lsblk -lno LABEL "/dev/${dname}" 2>/dev/null); then
+            d_label="${raw_label#"${raw_label%%[![:space:]]*}"}"
+            d_label="${d_label%"${d_label##*[![:space:]]}"}"
+        fi
+        d_mounts=""
+        if raw_mnt=$(lsblk -lno MOUNTPOINT "/dev/${dname}" 2>/dev/null); then
+            d_mounts="$raw_mnt"
+        fi
+        if [ "$d_label" = "casper-rw" ] \
+            || echo "$d_mounts" | grep -qE "^/cow$"; then
             continue
         fi
         DISCOVERED_DRIVES+=("/dev/${dname}")
@@ -301,7 +314,7 @@ case "$scope_choice" in
             
             if [ "$valid_all" -eq 1 ]; then
                 # Clean up partition list format (no /dev/ prefix)
-                PARTITIONS_LIST=$(echo "$user_parts" | sed 's|/dev/||g')
+                PARTITIONS_LIST="${user_parts//\/dev\//}"
                 break
             else
                 echo -e "  ${RED}⚠️  The following partition(s) do not exist on ${TARGET_DRIVE}: ${invalid_list[*]}${RESET}"
@@ -315,7 +328,7 @@ esac
 if [ "$PARTITIONS_LIST" = "all" ]; then
     SCOPE_TAG="all"
 else
-    SCOPE_TAG=$(echo "$PARTITIONS_LIST" | tr ' ' '-')
+    SCOPE_TAG="${PARTITIONS_LIST// /-}"
 fi
 
 TIMESTAMP="$(date +%Y-%m-%d-%H%M)"
@@ -326,7 +339,7 @@ echo -e "${DIM}  ℹ️  Why we ask this: Image names must be unique to avoid ov
 echo -en "Enter image folder name [Press Enter for default: '${DEFAULT_IMAGE_NAME}']: "
 read -r user_img_name
 IMAGE_NAME="${user_img_name:-$DEFAULT_IMAGE_NAME}"
-IMAGE_NAME="$(echo "$IMAGE_NAME" | tr ' ' '_')"
+IMAGE_NAME="${IMAGE_NAME// /_}"
 DEST_DIR="${MOUNT_POINT}/${IMAGE_NAME}"
 
 # 5. Select Engine
