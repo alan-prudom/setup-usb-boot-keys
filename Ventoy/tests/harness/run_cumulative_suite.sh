@@ -36,6 +36,38 @@ echo "  • Tests Directory : ${TESTS_DIR}/cases"
 echo "  • Output Directory: ${OUT_DIR}"
 echo "======================================================================"
 
+# ==============================================================================
+# Pre-Flight Static Analysis (Multi-Command Linter)
+# Ensures scripts maintain 1-command-per-line discipline for 1:1 coverage hit fidelity
+# ==============================================================================
+BASHCOV_CLI="${VENTOY_DIR}/tools/bashcov/cli.py"
+if [ -f "$BASHCOV_CLI" ] && command -v python3 >/dev/null 2>&1; then
+    echo -e "\n[*] 🔍 Running Automated Pre-Flight Static Analysis (Multi-Command Linter)..."
+    LINT_TARGETS=(
+        "${VENTOY_DIR}/post-backup-wizard.sh"
+        "${VENTOY_DIR}/run_rescuezilla_backup_cli.sh"
+        "${VENTOY_DIR}/lib/lib_hardware_detect.sh"
+    )
+    # Only check files that exist
+    VALID_LINT_TARGETS=()
+    for lt in "${LINT_TARGETS[@]}"; do
+        [ -f "$lt" ] && VALID_LINT_TARGETS+=("$lt")
+    done
+
+    if [ ${#VALID_LINT_TARGETS[@]} -gt 0 ]; then
+        if ! python3 "$BASHCOV_CLI" lint "${VALID_LINT_TARGETS[@]}"; then
+            echo -e "\n\033[1;31m❌ Static Analysis Pre-Flight Check Failed!\033[0m"
+            echo -e "\033[1;33mMulti-command lines or subshell pipelines were detected that distort coverage metrics.\033[0m"
+            echo -e "Please reformat the flagged lines or run with SKIP_LINT=1 to bypass.\n"
+            if [ "${SKIP_LINT:-0}" != "1" ]; then
+                exit 1
+            else
+                echo -e "\033[1;33m⚠️  Warning: SKIP_LINT=1 set, proceeding despite violations...\033[0m\n"
+            fi
+        fi
+    fi
+fi
+
 # Global environment file loaded by subshells
 COV_ENV="/tmp/master_cov_env_$$.sh"
 cat << ENV_EOF > "$COV_ENV"

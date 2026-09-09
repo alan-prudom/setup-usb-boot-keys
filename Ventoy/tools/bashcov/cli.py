@@ -15,13 +15,26 @@ import glob
 import os
 import sys
 
-from .core.tracer import BashTracer
-from .core.lcov_generator import LcovGenerator
-from .plugins.runners.expect_runner import ExpectRunner
-from .plugins.collectors.local import LocalCollector
-from .plugins.reporters.console_reporter import ConsoleReporter
-from .plugins.reporters.html_reporter import HtmlReporter
-from .linter.multicmd import lint_files
+# Ensure parent directory of bashcov package is in sys.path when executed directly
+if __package__ is None or __package__ == "":
+    parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+    from bashcov.core.tracer import BashTracer
+    from bashcov.core.lcov_generator import LcovGenerator
+    from bashcov.plugins.runners.expect_runner import ExpectRunner
+    from bashcov.plugins.collectors.local import LocalCollector
+    from bashcov.plugins.reporters.console_reporter import ConsoleReporter
+    from bashcov.plugins.reporters.html_reporter import HtmlReporter
+    from bashcov.linter.multicmd import lint_files
+else:
+    from .core.tracer import BashTracer
+    from .core.lcov_generator import LcovGenerator
+    from .plugins.runners.expect_runner import ExpectRunner
+    from .plugins.collectors.local import LocalCollector
+    from .plugins.reporters.console_reporter import ConsoleReporter
+    from .plugins.reporters.html_reporter import HtmlReporter
+    from .linter.multicmd import lint_files
 
 
 def cmd_lint(args: argparse.Namespace) -> int:
