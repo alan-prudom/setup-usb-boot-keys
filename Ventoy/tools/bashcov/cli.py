@@ -36,6 +36,28 @@ def cmd_lint(args: argparse.Namespace) -> int:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
+    # 1. Pre-Flight Static Analysis
+    if not args.no_lint:
+        targets_to_lint = []
+        if args.sources:
+            targets_to_lint = [s for s in args.sources if os.path.exists(s)]
+        elif args.filter:
+            # Discover shell scripts matching the filter directory
+            for ext in ("*.sh", "*.bash"):
+                targets_to_lint.extend(glob.glob(os.path.join(args.filter, "**", ext), recursive=True))
+
+        if targets_to_lint:
+            print("=" * 70)
+            print("    🔍 PRE-FLIGHT STATIC LINTER CHECK (Multi-Command Inspection)")
+            print("=" * 70)
+            print(f"  • Checking {len(targets_to_lint)} source file(s) before instrumentation...")
+            lint_status = lint_files(targets_to_lint)
+            if lint_status != 0 and args.strict_lint:
+                print("\n\033[1;31m✖ Aborting execution: Resolve multi-command violations before running tests.\033[0m")
+                print("  (Use --no-lint or omit --strict-lint to run anyway)\n")
+                return 1
+            print("=" * 70 + "\n")
+
     out_dir = os.path.abspath(args.output_dir)
     collector = LocalCollector(out_dir)
     collector.prepare()
@@ -120,6 +142,8 @@ def main() -> int:
     run_p.add_argument("--filter", default="", help="Substring filter for traced filenames")
     run_p.add_argument("--prefix", default="", help="Prefix strip for genhtml HTML reports")
     run_p.add_argument("--html", action="store_true", default=True, help="Generate browsable HTML report")
+    run_p.add_argument("--no-lint", action="store_true", default=False, help="Skip pre-flight static analysis check")
+    run_p.add_argument("--strict-lint", action="store_true", default=False, help="Abort test run if linter finds multi-command violations")
     run_p.set_defaults(func=cmd_run)
 
     args = parser.parse_args()
