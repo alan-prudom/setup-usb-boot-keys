@@ -28,7 +28,7 @@ def run_test(script_cmd):
                     break
                 buf += data
                 # Stage 0: Wait for drive prompt, send empty enter then '9' then '1'
-                if stage == 0 and "Select drive to backup" in buf:
+                if stage == 0 and "Select disk block device" in buf:
                     os.write(master, b"\n")
                     stage = 1
                 elif stage == 1 and "Empty input" in buf:
@@ -50,7 +50,7 @@ def run_test(script_cmd):
                     os.write(master, b"1\n")
                     stage = 6
                 # Stage 6: Rescue Mode -> select Rescue Mode (2)
-                elif stage == 6 and "Select Rescue Mode" in buf:
+                elif stage == 6 and "Select error tolerance mode" in buf:
                     os.write(master, b"2\n")
                     stage = 7
                 # Stage 7: Pre-flight confirmation -> send empty enter then 'n'

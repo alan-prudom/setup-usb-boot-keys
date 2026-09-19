@@ -38,7 +38,7 @@ expect {
 
 # 3. Target Drive Selection: Test Input Validation
 expect {
-    "Select drive to backup" {
+    "Select disk block device" {
         send_user "\nINFO: Drive selection prompt reached. Testing empty input rejection...\n"
         send "\r"
     }
@@ -89,9 +89,9 @@ expect {
     timeout { exit 1 }
 }
 
-# 7. Hardware Rescue Mode: Select Rescue Mode (2)
+# 7. Error Tolerance & Rescue Mode: Select Rescue Mode (2)
 expect {
-    "Bad Sector & Hardware Rescue Handling" {
+    "Error Tolerance & Rescue Mode" {
         send_user "\nPASS: Rescue Mode prompt 5-5 reached.\n"
         send "2\r"
     }

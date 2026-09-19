@@ -40,7 +40,7 @@ expect {
 # 3. Dynamic Target Drive Selection:
 # Test out-of-range rejection then select Drive 1 (/dev/sda)
 expect {
-    -re {Select drive to backup \[1-([0-9]+)\]:} {
+    -re {Select disk block device \[1-([0-9]+)\]:} {
         set max_drive $expect_out(1,string)
         send_user "\nPASS: Dynamic drives discovered (1 to $max_drive). Testing invalid drive selection...\n"
         send "99\r"

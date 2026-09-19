@@ -21,7 +21,7 @@ send_user "\n=== TEST_CASE: Backup CLI - Custom Partition Input & Validation ===
 spawn bash "$script_path"
 
 expect {
-    "Select drive to backup" { send "1\r" }
+    "Select disk block device" { send "1\r" }
     timeout { exit 1 }
 }
 
@@ -70,7 +70,7 @@ expect {
 
 # Rescue Mode: Standard (1)
 expect {
-    "Select Rescue Mode" { send "1\r" }
+    "Select error tolerance mode" { send "1\r" }
     timeout { exit 1 }
 }
 

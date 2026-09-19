@@ -25,7 +25,7 @@ else
     RESET=""
 fi
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
 
 # Strict Yes/No prompt function (rejects empty Return key)
 prompt_yes_no() {
@@ -72,26 +72,30 @@ if [ -f "${SCRIPT_DIR}/latest_backup.env" ]; then
 fi
 
 # Check for symlink
-if [ -z "$LOG_FILE" ] || [ ! -f "$LOG_FILE" ]; then
+if [ -z "$LOG_FILE" ] \
+    || [ ! -f "$LOG_FILE" ]; then
     if [ -f "${SCRIPT_DIR}/latest_backup.log" ]; then
         LOG_FILE="${SCRIPT_DIR}/latest_backup.log"
     fi
 fi
 
 # Check for newest backup_*.log in script directory or /media
-if [ -z "$LOG_FILE" ] || [ ! -f "$LOG_FILE" ]; then
+if [ -z "$LOG_FILE" ] \
+    || [ ! -f "$LOG_FILE" ]; then
     NEWEST_LOG=""
     local raw_logs
     if raw_logs=$(ls -t "${SCRIPT_DIR}"/backup_*.log /media/*/*/backup_*.log 2>/dev/null); then
         NEWEST_LOG=$(head -n 1 <<< "$raw_logs")
     fi
-    if [ -n "$NEWEST_LOG" ] && [ -f "$NEWEST_LOG" ]; then
+    if [ -n "$NEWEST_LOG" ] \
+        && [ -f "$NEWEST_LOG" ]; then
         LOG_FILE="$NEWEST_LOG"
     fi
 fi
 
 # Fallback to system logs
-if [ -z "$LOG_FILE" ] || [ ! -f "$LOG_FILE" ]; then
+if [ -z "$LOG_FILE" ] \
+    || [ ! -f "$LOG_FILE" ]; then
     if [ -f "/tmp/rescuezilla.log" ]; then
         LOG_FILE="/tmp/rescuezilla.log"
     elif [ -f "/var/log/clonezilla.log" ]; then
@@ -107,7 +111,8 @@ status_type="UNKNOWN"
 error_count=0
 warning_count=0
 
-if [ -n "$LOG_FILE" ] && [ -f "$LOG_FILE" ]; then
+if [ -n "$LOG_FILE" ] \
+    && [ -f "$LOG_FILE" ]; then
     has_log=1
     # Filter benign lines that contain 'error' but are not actual backup failures
     error_count=0
@@ -128,7 +133,8 @@ if [ -n "$LOG_FILE" ] && [ -f "$LOG_FILE" ]; then
 
     # Check Clonezilla and Rescuezilla completion markers
     if grep -iE "Ending /usr/sbin/ocs-sr|End of saveparts job|End of savedisk job|Finished!|backup completed successfully|restore completed successfully|clone completed successfully|successfully saved|completed with 0 errors" "$LOG_FILE" >/dev/null 2>&1; then
-        if [ "$error_count" -eq 0 ] && [ "$rescue_bad_blocks" -eq 0 ]; then
+        if [ "$error_count" -eq 0 ] \
+            && [ "$rescue_bad_blocks" -eq 0 ]; then
             status_type="SUCCESS"
         elif [ "$rescue_bad_blocks" -gt 0 ]; then
             status_type="RESCUE_SUCCESS"
@@ -191,10 +197,22 @@ if [ -n "${LATEST_TARGET_DRIVE:-}" ]; then
     echo -e "  • Source Drive       : ${CYAN}${LATEST_TARGET_DRIVE}${RESET} (${LATEST_PARTITIONS:-all})"
 fi
 if [ "$has_log" -eq 1 ]; then
-    echo -e "  • Log Size           : $(du -h "$LOG_FILE" 2>/dev/null | awk '{print $1}') ($(wc -l < "$LOG_FILE") lines)"
+    log_size_raw=""
+    if log_size_raw=$(du -h "$LOG_FILE" 2>/dev/null); then
+        # Extract first field (size) — du output is "<size>\t<path>"; strip from first tab onward
+        log_size="${log_size_raw%%$'\t'*}"
+    else
+        log_size="?"
+    fi
+    log_lines=$(wc -l < "$LOG_FILE")
+    log_ts=""
+    if ! log_ts=$(date -r "$LOG_FILE" "+%Y-%m-%d %H:%M:%S" 2>/dev/null); then
+        log_ts="N/A"
+    fi
+    echo -e "  • Log Size           : ${log_size} (${log_lines} lines)"
     echo -e "  • Detected Errors    : ${RED}${error_count}${RESET}"
     echo -e "  • Detected Warnings  : ${YELLOW}${warning_count}${RESET}"
-    echo -e "  • Last Log Timestamp : $(date -r "$LOG_FILE" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "N/A")"
+    echo -e "  • Last Log Timestamp : ${log_ts}"
 else
     echo -e "  • Log Status         : ${RED}Not Found (Live session active or stateless run)${RESET}"
 fi
@@ -258,10 +276,13 @@ while true; do
             echo -e "\n${BOLD}🔍 Recent Error & Warning Snippets:${RESET}"
             if [ "$has_log" -eq 1 ]; then
                 echo -e "${CYAN}--- Error Matches in $LOG_FILE ---${RESET}"
+                local raw_err_matches=""
+                raw_err_matches=$(grep -iE "error|failed|fatal|corrupt|abort|read error|input/output error|no space left" "$LOG_FILE" 2>/dev/null)
+                local filtered_err_matches=""
+                filtered_err_matches=$(grep -viE "error_count|0 errors|no error|grub-probe: error: cannot find a GRUB drive|check if udevd rules|img_out_err|dmraid.table" <<< "$raw_err_matches")
                 local err_matches=""
-                if err_matches=$(grep -iE "error|failed|fatal|corrupt|abort|read error|input/output error|no space left" "$LOG_FILE" 2>/dev/null \
-                    | grep -viE "error_count|0 errors|no error|grub-probe: error: cannot find a GRUB drive|check if udevd rules|img_out_err|dmraid.table" \
-                    | tail -n 20); then
+                err_matches=$(tail -n 20 <<< "$filtered_err_matches")
+                if [ -n "$err_matches" ]; then
                     echo "$err_matches"
                 else
                     echo "No explicit errors found."
@@ -345,7 +366,8 @@ while true; do
     esac
 done
 
-if [[ "${1:-}" != *"--no-pause"* ]] && [[ "${2:-}" != *"--no-pause"* ]]; then
+if [[ "${1:-}" != *"--no-pause"* ]] \
+    && [[ "${2:-}" != *"--no-pause"* ]]; then
     echo ""
     read -n 1 -s -r -p "Wizard closed. Press any key to close this terminal..."
     echo ""

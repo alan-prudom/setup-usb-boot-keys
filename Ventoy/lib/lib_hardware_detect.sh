@@ -12,10 +12,15 @@ detect_usb_device() {
     local p_boot=""
     local raw_p_boot
     if raw_p_boot=$(lsblk -rno PATH,LABEL 2>/dev/null); then
-        p_boot=$(echo "$raw_p_boot" \
-            | grep -iE "VTOYEFI|Ventoy" \
-            | awk '{print $1}' \
-            | head -n 1)
+        # Parse lsblk output: find first PATH whose LABEL matches VTOYEFI or Ventoy
+        while IFS=' ' read -r path label; do
+            case "$label" in
+                [Vv][Tt][Oo][Yy][Ee][Ff][Ii]|[Vv][Ee][Nn][Tt][Oo][Yy]*)
+                    p_boot="$path"
+                    break
+                    ;;
+            esac
+        done <<< "$raw_p_boot"
     fi
     if [ -n "$p_boot" ]; then
         if dev=$(lsblk -no PKNAME "$p_boot" 2>/dev/null); then
@@ -54,7 +59,8 @@ detect_data_partition() {
         fi
     fi
 
-    if [ -z "$p4" ] || [ ! -b "$p4" ]; then
+    if [ -z "$p4" ] \
+        || [ ! -b "$p4" ]; then
         echo "Error: Data partition (Partition 4) could not be detected." >&2
         return 1
     fi

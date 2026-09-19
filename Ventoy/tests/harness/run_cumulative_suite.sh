@@ -4,11 +4,13 @@
 # Runs all expect test cases, aggregates coverage, captures all transcripts,
 # and generates merged lcov & HTML reports with branch coverage.
 # ==============================================================================
-set -euo pipefail
+set -uo pipefail
+# NOTE: -e is intentionally NOT set here so that individual test failures do not
+# abort the entire suite. Each test exit code is captured explicitly below.
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TESTS_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-VENTOY_DIR="$(cd "${TESTS_DIR}/.." && pwd)"
+SCRIPT_DIR="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
+TESTS_DIR="$(readlink -f "${SCRIPT_DIR}/..")"
+VENTOY_DIR="$(readlink -f "${TESTS_DIR}/..")"
 OUT_DIR="${1:-${VENTOY_DIR}/coverage_results}"
 
 # Self-healing clean of prior artifacts, requesting sudo if owned by root
@@ -41,7 +43,8 @@ echo "======================================================================"
 # Ensures scripts maintain 1-command-per-line discipline for 1:1 coverage hit fidelity
 # ==============================================================================
 BASHCOV_CLI="${VENTOY_DIR}/tools/bashcov/cli.py"
-if [ -f "$BASHCOV_CLI" ] && command -v python3 >/dev/null 2>&1; then
+if [ -f "$BASHCOV_CLI" ] \
+    && command -v python3 >/dev/null 2>&1; then
     echo -e "\n[*] 🔍 Running Automated Pre-Flight Static Analysis (Multi-Command Linter)..."
     LINT_TARGETS=(
         "${VENTOY_DIR}/post-backup-wizard.sh"
@@ -51,7 +54,9 @@ if [ -f "$BASHCOV_CLI" ] && command -v python3 >/dev/null 2>&1; then
     # Only check files that exist
     VALID_LINT_TARGETS=()
     for lt in "${LINT_TARGETS[@]}"; do
-        [ -f "$lt" ] && VALID_LINT_TARGETS+=("$lt")
+        if [ -f "$lt" ]; then
+            VALID_LINT_TARGETS+=("$lt")
+        fi
     done
 
     if [ ${#VALID_LINT_TARGETS[@]} -gt 0 ]; then
@@ -80,14 +85,22 @@ chmod 644 "$COV_ENV"
 export BASH_ENV="$COV_ENV"
 
 cleanup() {
-    rm -f "$COV_ENV" 2>/dev/null || true
-    if [ -n "${SUDO_USER:-}" ] && [ -d "$OUT_DIR" ]; then
-        chown -R "${SUDO_USER}:${SUDO_USER}" "$OUT_DIR" 2>/dev/null || true
+    rm -f "$COV_ENV" 2>/dev/null || \
+        true
+    if [ -n "${SUDO_USER:-}" ] \
+        && [ -d "$OUT_DIR" ]; then
+        chown -R "${SUDO_USER}:${SUDO_USER}" "$OUT_DIR" 2>/dev/null || \
+            true
     fi
 }
 trap cleanup EXIT
 
-# Run each test case sequentially
+# Run each test case sequentially — failures are captured and reported at the
+# end; they do NOT abort the loop so all 12 tests always run.
+PASS_COUNT=0
+FAIL_COUNT=0
+declare -a FAILED_TESTS=()
+
 for test_file in "${TESTS_DIR}/cases"/*.exp; do
     if [ -f "$test_file" ]; then
         tname=$(basename "$test_file")
@@ -99,9 +112,28 @@ for test_file in "${TESTS_DIR}/cases"/*.exp; do
             expect "$test_file"
             echo ""
         } >> "$TRANSCRIPT_RAW" 2>&1
-        echo "    ✓ ${tname} passed."
+        test_exit=$?
+        if [ "$test_exit" -eq 0 ]; then
+            echo -e "    \033[1;32m✓ PASS\033[0m  ${tname}"
+            PASS_COUNT=$((PASS_COUNT + 1))
+        else
+            echo -e "    \033[1;31m✗ FAIL\033[0m  ${tname}  (exit ${test_exit})"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+            FAILED_TESTS+=("$tname")
+        fi
     fi
 done
+
+echo ""
+echo "======================================================================"
+echo "  🧪 TEST SUITE RESULTS: ${PASS_COUNT} passed, ${FAIL_COUNT} failed"
+echo "======================================================================"
+if [ "${#FAILED_TESTS[@]}" -gt 0 ]; then
+    echo -e "  \033[1;31mFailed tests:\033[0m"
+    for ft in "${FAILED_TESTS[@]}"; do
+        echo -e "    \033[1;31m✗\033[0m $ft"
+    done
+fi
 
 # Generate clean text transcript
 sed -E 's/\x1B\[[0-9;]*[a-zA-Z]//g; s/\r//g' "$TRANSCRIPT_RAW" > "$TRANSCRIPT_CLEAN"
@@ -230,7 +262,8 @@ for fp in sorted(file_lines.keys()):
 PY_EOF
 
 # Generate HTML report
-if command -v genhtml >/dev/null 2>&1 && [ -f "${OUT_DIR}/coverage.info" ]; then
+if command -v genhtml >/dev/null 2>&1 \
+    && [ -f "${OUT_DIR}/coverage.info" ]; then
     HTML_DIR="${OUT_DIR}/html"
     mkdir -p "$HTML_DIR"
     echo -e "\n[*] Generating HTML coverage report with Branch Coverage enabled..."
@@ -239,6 +272,12 @@ if command -v genhtml >/dev/null 2>&1 && [ -f "${OUT_DIR}/coverage.info" ]; then
         --title "Cumulative Rescuezilla Coverage" \
         --branch-coverage \
         --legend \
-        --show-details || true
+        --show-details || \
+        true
     echo "  • Browsable HTML : ${HTML_DIR}/index.html"
+fi
+
+# Exit non-zero if any test failed — allows callers to detect failures
+if [ "$FAIL_COUNT" -gt 0 ]; then
+    exit 1
 fi

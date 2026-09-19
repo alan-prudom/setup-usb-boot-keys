@@ -82,9 +82,10 @@ echo -e "${CYAN}================================================================
 echo -e "${BOLD}       🚀 LIVE COMMAND-LINE BACKUP ASSISTANT (RESCUE/CLONE)          ${RESET}"
 echo -e "${CYAN}======================================================================${RESET}"
 
+
 # 1. Locate SSH Key & Load Helper Libraries
 SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
-SCRIPT_DIR="$(cd "$SCRIPT_DIR" && pwd)"
+SCRIPT_DIR="$(readlink -f "$SCRIPT_DIR")"
 if [ -f "${SCRIPT_DIR}/lib/lib_hardware_detect.sh" ]; then
     source "${SCRIPT_DIR}/lib/lib_hardware_detect.sh"
 elif [ -f "/scripts/lib/lib_hardware_detect.sh" ]; then
@@ -98,15 +99,7 @@ MOUNT_POINT="/mnt/backup"
 LOG_DIR="${SCRIPT_DIR}"
 
 if [ ! -f "$KEY_FILE" ]; then
-    for candidate in "/scripts/id_rsa" "/home/alan/.ssh/id_rsa" "/home/ubuntu/.ssh/id_rsa" "/home/ubuntu/scripts/id_rsa" "${SCRIPT_DIR}/id_rsa"; do
-        if [ -f "$candidate" ]; then
-            KEY_FILE="$candidate"
-            break
-        fi
-    done
-fi
-
-if [ ! -f "$KEY_FILE" ]; then
+    # Search common mount points if not found directly
     raw_found=""
     if raw_found=$(find /media/devmon /media/ubuntu /home/ubuntu -maxdepth 3 -name "id_rsa" 2>/dev/null); then
         if [ -n "$raw_found" ]; then
@@ -115,7 +108,8 @@ if [ ! -f "$KEY_FILE" ]; then
     fi
 fi
 
-if [ -z "$KEY_FILE" ] || [ ! -f "$KEY_FILE" ]; then
+if [ -z "$KEY_FILE" ] \
+    || [ ! -f "$KEY_FILE" ]; then
     echo -e "${RED}✗ Error: SSH key 'id_rsa' not found.${RESET}"
     exit 1
 fi
@@ -140,7 +134,8 @@ sshfs -o identityfile="$KEY_FILE",allow_other,StrictHostKeyChecking=no,reconnect
 
 # Verify write capability
 TEST_FILE="${MOUNT_POINT}/.write_test_$(date +%s)"
-if touch "$TEST_FILE" 2>/dev/null && rm -f "$TEST_FILE" 2>/dev/null; then
+if touch "$TEST_FILE" 2>/dev/null \
+    && rm -f "$TEST_FILE" 2>/dev/null; then
     echo -e "${GREEN}✓ Verified READ-WRITE access to ${REMOTE_SERVER}:${REMOTE_PATH}!${RESET}"
 else
     echo -e "${RED}✗ Error: Remote filesystem mounted, but write test failed!${RESET}"
@@ -153,7 +148,8 @@ echo -e "${DIM}  ℹ️  Why we ask this: Dynamically scans all physical and vir
 
 DISCOVERED_DRIVES=()
 while IFS= read -r dname; do
-    if [ -n "$dname" ] && [ -b "/dev/${dname}" ]; then
+    if [ -n "$dname" ] \
+        && [ -b "/dev/${dname}" ]; then
         # Exclude active persistence / live overlay block devices (e.g. casper-rw or backing /cow)
         d_label=""
         if raw_label=$(lsblk -lno LABEL "/dev/${dname}" 2>/dev/null); then
@@ -179,21 +175,24 @@ fi
 
 for i in "${!DISCOVERED_DRIVES[@]}"; do
     dev_path="${DISCOVERED_DRIVES[$i]}"
-    d_size=$(
-        lsblk -d -n -o SIZE "$dev_path" 2>/dev/null |
-        xargs ||
-        echo "Unknown"
-    )
-    d_model=$(
-        lsblk -d -n -o MODEL "$dev_path" 2>/dev/null |
-        xargs ||
-        echo ""
-    )
-    d_tran=$(
-        lsblk -d -n -o TRAN "$dev_path" 2>/dev/null |
-        xargs ||
-        echo ""
-    )
+    d_size=""
+    if raw_size=$(lsblk -d -n -o SIZE "$dev_path" 2>/dev/null); then
+        d_size="${raw_size#"${raw_size%%[![:space:]]*}"}"
+        d_size="${d_size%"${d_size##*[![:space:]]}"}"
+    fi
+    [ -z "$d_size" ] && \
+        d_size="Unknown"
+
+    d_model=""
+    if raw_model=$(lsblk -d -n -o MODEL "$dev_path" 2>/dev/null); then
+        d_model="${raw_model#"${raw_model%%[![:space:]]*}"}"
+        d_model="${d_model%"${d_model##*[![:space:]]}"}"
+    fi
+    d_tran=""
+    if raw_tran=$(lsblk -d -n -o TRAN "$dev_path" 2>/dev/null); then
+        d_tran="${raw_tran#"${raw_tran%%[![:space:]]*}"}"
+        d_tran="${d_tran%"${d_tran##*[![:space:]]}"}"
+    fi
     if [ -z "$d_model" ]; then
         d_model="Disk Device"
     fi
@@ -203,16 +202,28 @@ for i in "${!DISCOVERED_DRIVES[@]}"; do
     echo -e "  ${CYAN}[$((i + 1))]${RESET} ${dev_path} (${d_size}, ${d_model})"
 done
 
-drive_idx=$(prompt_choice "Select drive to backup [1-${#DISCOVERED_DRIVES[@]}]: " 1 "${#DISCOVERED_DRIVES[@]}")
-if [ "$drive_idx" = "0" ]; then
-    echo -e "\n${YELLOW}Operation cancelled by user. Returning to menu...${RESET}"
-    exit 0
+echo ""
+drive_choice=$(prompt_choice "Select disk block device [1-${#DISCOVERED_DRIVES[@]}]: " 1 "${#DISCOVERED_DRIVES[@]}")
+drive_idx="$drive_choice"
+if [ "$drive_idx" -lt 1 ] \
+    || [ "$drive_idx" -gt "${#DISCOVERED_DRIVES[@]}" ]; then
+    echo -e "${RED}✗ Error: Invalid drive selection index!${RESET}"
+    exit 1
 fi
 TARGET_DRIVE="${DISCOVERED_DRIVES[$((drive_idx - 1))]}"
 
 # Determine default drive tag for backup folder naming
 TARGET_BASE=$(basename "$TARGET_DRIVE")
-if [[ "$TARGET_DRIVE" =~ ^/dev/(sd[b-z]|nvme[1-9]|vd[b-z]) ]] && lsblk -n -o LABEL "$TARGET_DRIVE" 2>/dev/null | grep -qi "ventoy"; then
+is_ventoy=0
+if [[ "$TARGET_DRIVE" =~ ^/dev/(sd[b-z]|nvme[1-9]|vd[b-z]) ]]; then
+    if raw_tgt_label=$(lsblk -n -o LABEL "$TARGET_DRIVE" 2>/dev/null); then
+        if grep -qi "ventoy" <<< "$raw_tgt_label"; then
+            is_ventoy=1
+        fi
+    fi
+fi
+
+if [ "$is_ventoy" -eq 1 ]; then
     DEFAULT_DRIVE_TAG="Ventoy-USB"
 elif declare -f detect_machine_model >/dev/null 2>&1; then
     DEFAULT_DRIVE_TAG="$(detect_machine_model)"
@@ -234,21 +245,21 @@ done < <(lsblk -n -l -o NAME,TYPE "$TARGET_DRIVE" 2>/dev/null | awk '$2=="part"{
 echo -e "Available Partitions on ${TARGET_DRIVE}:"
 if [ "${#AVAILABLE_PARTS[@]}" -gt 0 ]; then
     for p in "${AVAILABLE_PARTS[@]}"; do
-        p_size=$(
-            lsblk -n -o SIZE "/dev/$p" 2>/dev/null |
-            xargs ||
-            echo ""
-        )
-        p_fs=$(
-            lsblk -n -o FSTYPE "/dev/$p" 2>/dev/null |
-            xargs ||
-            echo ""
-        )
-        p_label=$(
-            lsblk -n -o LABEL "/dev/$p" 2>/dev/null |
-            xargs ||
-            echo ""
-        )
+        p_size=""
+        if raw_size=$(lsblk -n -o SIZE "/dev/$p" 2>/dev/null); then
+            p_size="${raw_size#"${raw_size%%[![:space:]]*}"}"
+            p_size="${p_size%"${p_size##*[![:space:]]}"}"
+        fi
+        p_fs=""
+        if raw_fs=$(lsblk -n -o FSTYPE "/dev/$p" 2>/dev/null); then
+            p_fs="${raw_fs#"${raw_fs%%[![:space:]]*}"}"
+            p_fs="${p_fs%"${p_fs##*[![:space:]]}"}"
+        fi
+        p_label=""
+        if raw_label=$(lsblk -n -o LABEL "/dev/$p" 2>/dev/null); then
+            p_label="${raw_label#"${raw_label%%[![:space:]]*}"}"
+            p_label="${p_label%"${p_label##*[![:space:]]}"}"
+        fi
         p_desc="${p_size}"
         if [ -n "$p_fs" ]; then
             p_desc="${p_desc}, ${p_fs}"
@@ -287,21 +298,21 @@ case "$scope_choice" in
         while true; do
             echo -en "Enter partition names separated by space (e.g. ${AVAILABLE_PARTS[*]:0:2}): "
             read -r user_parts
-            user_parts="$(echo "$user_parts" | xargs)"
+            user_parts="${user_parts#"${user_parts%%[![:space:]]*}"}"
+            user_parts="${user_parts%"${user_parts##*[![:space:]]}"}"
             if [ -z "$user_parts" ]; then
                 echo -e "  ${YELLOW}⚠️  Partition list cannot be empty. Please enter one or more partition names.${RESET}"
                 continue
             fi
             
-            # Validate every entered partition against AVAILABLE_PARTS
-            valid_all=1
+            # Validate that entered partitions exist on the drive
             invalid_list=()
+            valid_all=1
             for up in $user_parts; do
-                # Strip leading /dev/ if provided by user
-                clean_p="${up#/dev/}"
+                clean_up="${up#/dev/}"
                 found_part=0
                 for ap in "${AVAILABLE_PARTS[@]}"; do
-                    if [ "$clean_p" = "$ap" ]; then
+                    if [ "$clean_up" = "$ap" ]; then
                         found_part=1
                         break
                     fi
@@ -313,7 +324,6 @@ case "$scope_choice" in
             done
             
             if [ "$valid_all" -eq 1 ]; then
-                # Clean up partition list format (no /dev/ prefix)
                 PARTITIONS_LIST="${user_parts//\/dev\//}"
                 break
             else
@@ -346,15 +356,16 @@ DEST_DIR="${MOUNT_POINT}/${IMAGE_NAME}"
 echo -e "\n${BOLD}[4/5] Imaging Engine Selection${RESET}"
 echo -e "${DIM}  ℹ️  Why we ask this: Clonezilla's native CLI ('ocs-sr') is the battle-tested standard with 15+ years of stability in terminal mode. Rescuezilla's CLI is labeled experimental and may format output differently.${RESET}"
 echo -e "  ${CYAN}[1]${RESET} Clonezilla Native Engine (ocs-sr) [Standard, Ultra-Reliable]"
-echo -e "  ${CYAN}[2]${RESET} Rescuezilla Python Engine (rescuezillapy)"
+echo -e "  ${CYAN}[2]${RESET} Rescuezilla Python CLI (rescuezillapy) [Experimental GUI Backend]"
 engine_choice=$(prompt_choice "Select imaging engine [1-2]: " 1 2)
 
-# 6. Rescue Mode Selection (Bad Sectors Handling)
-echo -e "\n${BOLD}[5/5] Bad Sector & Hardware Rescue Handling${RESET}"
-echo -e "${DIM}  ℹ️  Why we ask this: If the source drive has physical degradation (like SanDisk/Crucial SSDs with uncorrectable sectors), standard Partclone aborts immediately to protect data integrity. In Rescue Mode ('--rescue'), Partclone continues past bad blocks and zeroes unreadable sectors so imaging finishes successfully.${RESET}"
-echo -e "  ${CYAN}[1]${RESET} Standard Mode (Strict integrity check; abort if bad sectors are found)"
-echo -e "  ${CYAN}[2]${RESET} 🚨 Rescue Mode (--rescue: bypass bad sectors, zero unreadable blocks, continue imaging)"
-rescue_choice=$(prompt_choice "Select Rescue Mode [1-2, Default 1]: " 1 2)
+# 6. Select Strict vs Rescue Mode
+echo -e "\n${BOLD}[5/5] Error Tolerance & Rescue Mode${RESET}"
+echo -e "${DIM}  ℹ️  Why we ask this: Rescue Mode passes '--rescue' to Partclone, which writes zero blocks and continues cloning when bad sectors or filesystem bitmap mismatches occur instead of aborting.${RESET}"
+echo -e "  ${CYAN}[1]${RESET} Standard Mode [Strict: Abort on bad sectors or filesystem inconsistencies]"
+echo -e "  ${CYAN}[2]${RESET} Rescue Mode   [Fault-Tolerant: Skip bad blocks and force imaging past errors]"
+rescue_choice=$(prompt_choice "Select error tolerance mode [1-2]: " 1 2)
+
 RESCUE_FLAG=""
 RESCUEZILLA_EXTRA=""
 if [ "$rescue_choice" = "2" ]; then
@@ -368,8 +379,17 @@ echo -e "\n${BOLD}--- Pre-Flight Configuration Summary ---${RESET}"
 echo -e "  • Target Disk      : ${CYAN}${TARGET_DRIVE}${RESET}"
 echo -e "  • Partitions       : ${CYAN}${PARTITIONS_LIST}${RESET}"
 echo -e "  • Destination Path : ${CYAN}${DEST_DIR}${RESET}"
-echo -e "  • Selected Engine  : ${CYAN}$([ "$engine_choice" = "2" ] && echo "Rescuezilla (rescuezillapy)" || echo "Clonezilla (ocs-sr)")${RESET}"
-echo -e "  • Rescue Mode      : ${CYAN}$([ "$rescue_choice" = "2" ] && echo "ENABLED (--rescue)" || echo "Standard (Strict)")${RESET}"
+engine_label="Clonezilla (ocs-sr)"
+if [ "$engine_choice" = "2" ]; then
+    engine_label="Rescuezilla (rescuezillapy)"
+fi
+echo -e "  • Selected Engine  : ${CYAN}${engine_label}${RESET}"
+
+rescue_label="Standard (Strict)"
+if [ "$rescue_choice" = "2" ]; then
+    rescue_label="ENABLED (--rescue)"
+fi
+echo -e "  • Rescue Mode      : ${CYAN}${rescue_label}${RESET}"
 
 echo -e "\n${DIM}  ℹ️  Why we ask for confirmation: Starting the backup initiates intensive disk reads and multi-gigabyte network writes. Verifying options now prevents imaging with incorrect parameters.${RESET}"
 if ! prompt_yes_no "Start backup operation now? (y/n): "; then
@@ -382,7 +402,13 @@ echo -e "\n${CYAN}Starting imaging pipeline. Real-time log saved to: ${LOG_FILE}
 
 BACKUP_EXIT_CODE=0
 set +e
-if [ "$engine_choice" = "1" ] || ! command -v rescuezillapy >/dev/null 2>&1; then
+has_rescuezillapy=1
+if ! command -v rescuezillapy >/dev/null 2>&1; then
+    has_rescuezillapy=0
+fi
+
+if [ "$engine_choice" = "1" ] \
+    || [ "$has_rescuezillapy" -eq 0 ]; then
     mkdir -p /home/partimag
     if mountpoint -q /home/partimag; then
         umount -l /home/partimag 2>/dev/null || \
@@ -444,7 +470,15 @@ else
     echo -e "  • Check log file: ${BOLD}${LOG_FILE}${RESET}"
 
     # Specific Triage for Partclone extfs bitmap free count mismatch
-    if grep -q "bitmap free count err" "$LOG_FILE" 2>/dev/null || grep -q "bitmap free count err" /var/log/partclone.log 2>/dev/null; then
+    has_bitmap_err=0
+    if grep -q "bitmap free count err" "$LOG_FILE" 2>/dev/null; then
+        has_bitmap_err=1
+    elif [ -f "/var/log/partclone.log" ]; then
+        if grep -q "bitmap free count err" /var/log/partclone.log 2>/dev/null; then
+            has_bitmap_err=1
+        fi
+    fi
+    if [ "$has_bitmap_err" -eq 1 ]; then
         echo -e "\n  ${YELLOW}🔍 Root Cause Identified: Partclone Filesystem Bitmap Inconsistency${RESET}"
         echo -e "     ${DIM}Partclone detected uncommitted journal transactions or a dirty filesystem on ${TARGET_DRIVE}.${RESET}"
         echo -e "     ${CYAN}Recommended Solutions:${RESET}"

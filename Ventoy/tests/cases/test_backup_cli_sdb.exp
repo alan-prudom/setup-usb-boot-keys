@@ -38,7 +38,7 @@ expect {
 
 # 3. Target Drive Selection: Select Option 2 (/dev/sdb)
 expect {
-    "Select drive to backup" {
+    "Select disk block device" {
         send_user "\nINFO: Selecting Drive 2 (/dev/sdb)...\n"
         send "2\r"
     }
@@ -88,9 +88,9 @@ expect {
     timeout { exit 1 }
 }
 
-# 7. Hardware Rescue Mode: Select Option 1 (Standard Mode)
+# 7. Error Tolerance & Rescue Mode: Select Option 1 (Standard Mode)
 expect {
-    "Bad Sector & Hardware Rescue Handling" {
+    "Error Tolerance & Rescue Mode" {
         send_user "\nINFO: Selecting Standard Mode (Option 1)...\n"
         send "1\r"
     }

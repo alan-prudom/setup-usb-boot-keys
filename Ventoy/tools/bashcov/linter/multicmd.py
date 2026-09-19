@@ -54,6 +54,10 @@ def analyze_script(filename: str, source_text: str) -> List[LinterViolation]:
 
     in_heredoc = False
     heredoc_delimiter = ""
+    # Persistent lexing state across lines for multiline subshell tracking
+    subshell_depth = 0
+    subshell_start_line = 0
+    subshell_is_multiline = False
 
     for lidx, raw_line in enumerate(lines, start=1):
         line = raw_line.rstrip()
@@ -76,15 +80,13 @@ def analyze_script(filename: str, source_text: str) -> List[LinterViolation]:
             heredoc_delimiter = hd_match.group(1)
 
         # Lexing states for current line
-        in_single_quote = False
-        in_double_quote = False
+        quote_stack = []
         is_escaped = False
         in_c_style_for = bool(re.match(r"^\s*for\s*\(\(.*\)\)", line))
 
         semicolon_indices = []
         double_and_indices = []
         double_or_indices = []
-        subshell_depth = 0
         subshell_multicmd = []
 
         col = 1
@@ -93,6 +95,7 @@ def analyze_script(filename: str, source_text: str) -> List[LinterViolation]:
 
         while idx < line_len:
             ch = line[idx]
+            top_quote = quote_stack[-1] if quote_stack else None
 
             if is_escaped:
                 is_escaped = False
@@ -106,39 +109,68 @@ def analyze_script(filename: str, source_text: str) -> List[LinterViolation]:
                 col += 1
                 continue
 
-            if ch == "'" and not in_double_quote:
-                in_single_quote = not in_single_quote
+            # Handle quotes
+            if ch == "'" and top_quote != '"':
+                if top_quote == "'":
+                    quote_stack.pop()
+                else:
+                    quote_stack.append("'")
                 idx += 1
                 col += 1
                 continue
 
-            if ch == '"' and not in_single_quote:
-                in_double_quote = not in_double_quote
+            if ch == '"' and top_quote != "'":
+                if top_quote == '"':
+                    quote_stack.pop()
+                else:
+                    quote_stack.append('"')
                 idx += 1
                 col += 1
                 continue
 
-            # Subshell entry: $( outside single quotes
-            if not in_single_quote and ch == '$' and idx + 1 < line_len and line[idx + 1] == '(':
+            # Subshell entry: $( outside single quotes (even if inside double quotes)
+            if top_quote != "'" and ch == '$' and idx + 1 < line_len and line[idx + 1] == '(':
                 subshell_depth += 1
+                if subshell_depth == 1:
+                    subshell_start_line = lidx
+                    subshell_is_multiline = False
+                # Pushing a subshell marker creates an isolated quote context
+                quote_stack.append('$(')
                 idx += 2
                 col += 2
                 continue
 
-            # Subshell exit: ) outside single quotes when in subshell
-            if not in_single_quote and subshell_depth > 0 and ch == ')':
+            # Subshell exit: ) outside single quotes
+            if top_quote != "'" and subshell_depth > 0 and ch == ')':
+                # Pop quote_stack back to matching '$('
+                while quote_stack and quote_stack[-1] != '$(':
+                    quote_stack.pop()
+                if quote_stack and quote_stack[-1] == '$(':
+                    quote_stack.pop()
                 subshell_depth -= 1
                 idx += 1
                 col += 1
                 continue
 
-            # Inside subshell outside quotes: check for command chaining operators: &&, ||, ;, |
-            if not in_single_quote and not in_double_quote and subshell_depth > 0:
+            # Check quote state inside current subshell frame
+            in_sub_sq = False
+            in_sub_dq = False
+            # Scan backwards from top of stack to last '$('
+            for item in reversed(quote_stack):
+                if item == '$(':
+                    break
+                if item == "'":
+                    in_sub_sq = True
+                elif item == '"':
+                    in_sub_dq = True
+
+            # Inside subshell: check for command chaining operators: &&, ||, ;, |
+            if subshell_depth > 0 and not in_sub_sq and not in_sub_dq:
                 if ch == ';' or ch == '|' or ch == '&':
                     subshell_multicmd.append((idx, col))
 
-            # Outside quotes and outside subshell
-            if not in_single_quote and not in_double_quote and not in_c_style_for and subshell_depth == 0:
+            # Outside quotes and outside subshell at root level
+            if not quote_stack and not in_c_style_for and subshell_depth == 0:
                 # Comment starts
                 if ch == '#' and (idx == 0 or line[idx - 1].isspace()):
                     break
@@ -182,6 +214,10 @@ def analyze_script(filename: str, source_text: str) -> List[LinterViolation]:
             idx += 1
             col += 1
 
+        # Check if subshell is multiline (spanned across previous lines)
+        if subshell_depth > 0 and lidx > subshell_start_line:
+            subshell_is_multiline = True
+
         # 1. Check semicolons
         for s_idx, s_col in semicolon_indices:
             prefix = line[:s_idx].strip()
@@ -206,7 +242,7 @@ def analyze_script(filename: str, source_text: str) -> List[LinterViolation]:
 
         # 2. Check inline case arm
         case_inline = re.search(r"^\s*([a-zA-Z0-9_*| -]+)\)\s*(.+);;", line)
-        if case_inline and not in_single_quote and not in_double_quote:
+        if case_inline and not quote_stack:
             arm_pattern = case_inline.group(1).strip()
             inner_cmd = case_inline.group(2).strip()
             if inner_cmd:
@@ -222,26 +258,17 @@ def analyze_script(filename: str, source_text: str) -> List[LinterViolation]:
                 )
 
         # 3. Check chained boolean / fallback operators on the same line
-        # Flag multiple && on same line, or '|| true' / '|| :' attached to commands
         all_bools = sorted(double_and_indices + double_or_indices, key=lambda x: x[0])
-        if len(all_bools) > 1:
-            # More than one && or || on the same line multiplies trace execution records
-            violations.append(
-                LinterViolation(
-                    filename=filename,
-                    lineno=lidx,
-                    col=all_bools[1][1],
-                    rule="MULTICMD_CHAINED_BOOLEAN",
-                    message=f"Multiple logical operators ('&&' / '||') on one line multiply gcov hit counts. Place each condition/command on its own line.",
-                    line_content=line,
-                )
-            )
-        elif len(all_bools) == 1:
-            # Check for trailing fallback: cmd || true / cmd || : / cmd || exit
-            b_idx, b_col = all_bools[0]
+        for b_idx, b_col in all_bools:
             op = line[b_idx:b_idx+2]
             suffix = line[b_idx+2:].strip()
             prefix = line[:b_idx].strip()
+
+            # Ignore line continuation slashes (e.g. command \ && next_command)
+            if suffix.endswith("\\") or prefix.endswith("\\"):
+                continue
+
+            # Trailing fallback: cmd || true / cmd || : / cmd || exit
             if op == "||" and suffix in ("true", ":", "exit 1", "return 1", "exit 0", "return 0") and prefix:
                 violations.append(
                     LinterViolation(
@@ -253,20 +280,46 @@ def analyze_script(filename: str, source_text: str) -> List[LinterViolation]:
                         line_content=line,
                     )
                 )
+            else:
+                # Any other inline && or || connecting two non-empty expressions/commands
+                if prefix and suffix:
+                    violations.append(
+                        LinterViolation(
+                            filename=filename,
+                            lineno=lidx,
+                            col=b_col,
+                            rule="MULTICMD_CHAINED_BOOLEAN",
+                            message=f"Inline boolean operator '{op}' connects multiple commands/conditions on one line. Split onto separate lines for accurate gcov hit and branch counts.",
+                            line_content=line,
+                        )
+                    )
+                    break
 
-        # 4. Check chained commands inside subshells: $(cmd1 | cmd2) or $(cmd1 && cmd2)
+        # 4. Check chained commands inside subshells
         if subshell_multicmd:
             sm_idx, sm_col = subshell_multicmd[0]
-            violations.append(
-                LinterViolation(
-                    filename=filename,
-                    lineno=lidx,
-                    col=sm_col,
-                    rule="MULTICMD_INLINE_SUBSHELL",
-                    message="Chained commands inside subshell '$()' on one line multiply trace counts. Break subshell into multiple lines or standalone steps.",
-                    line_content=line,
+            if subshell_is_multiline or (subshell_depth > 0 and lidx > subshell_start_line):
+                violations.append(
+                    LinterViolation(
+                        filename=filename,
+                        lineno=lidx,
+                        col=sm_col,
+                        rule="MULTILINE_SUBSHELL_PIPELINE",
+                        message="Multiline command substitution '$()' with internal pipeline/operators desynchronizes Bash line numbers and doubles coverage hits on subsequent lines. Replace with native Bash parameter expansion or standalone sequential statements.",
+                        line_content=line,
+                    )
                 )
-            )
+            else:
+                violations.append(
+                    LinterViolation(
+                        filename=filename,
+                        lineno=lidx,
+                        col=sm_col,
+                        rule="MULTICMD_INLINE_SUBSHELL",
+                        message="Chained commands inside subshell '$()' on one line multiply trace counts. Break subshell into multiple lines or standalone steps.",
+                        line_content=line,
+                    )
+                )
 
     return violations
 
