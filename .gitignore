@@ -5,3 +5,5 @@ Ventoy/coverage_results/
 *.png
 *.dat
 boot_cache/
+__pycache__/
+*.pyc
