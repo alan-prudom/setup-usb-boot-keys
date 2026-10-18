@@ -20,3 +20,5 @@ All artifacts have been copied from the AI agent workspace and renamed with huma
 | `DETAILED_SESSION_NOTES_2026_09_02.md` | [CONSOLIDATED_SESSION_NOTES_2026_09_02.md](CONSOLIDATED_SESSION_NOTES_2026_09_02.md) | Comprehensive cross-repository changelog and technical notes across `run_mosh` and `ap-devices-and-pcs`. |
 | `G5_VHDX_AUTOMOUNT_AND_DISK_AUDIT_2026_09_05.md` | [G5_VHDX_AUTOMOUNT_AND_DISK_AUDIT_2026_09_05.md](G5_VHDX_AUTOMOUNT_AND_DISK_AUDIT_2026_09_05.md) | Post-reboot chkdsk F: validation, VHDX initialization (archives.vhdx as NTFS volume V:), automount scripts, and exFAT small-file audit. |
 | `CONSOLIDATED_SESSION_NOTES_2026_09_05.md` | [CONSOLIDATED_SESSION_NOTES_2026_09_05.md](CONSOLIDATED_SESSION_NOTES_2026_09_05.md) | Comprehensive session notes and changelog covering power-button reboot, VHDX setup, automount automation, and HITL artifact curation. |
+| `session_notes.md` | [CONSOLIDATED_SESSION_NOTES_2026_10_18.md](CONSOLIDATED_SESSION_NOTES_2026_10_18.md) | Detailed technical notes covering Herdr installation, background DLL initialization diagnostics, agent skill configuration, and SSH port 2222 key authorization. |
+
