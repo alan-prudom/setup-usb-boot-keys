@@ -22,3 +22,4 @@ All artifacts have been copied from the AI agent workspace and renamed with huma
 | `CONSOLIDATED_SESSION_NOTES_2026_09_05.md` | [CONSOLIDATED_SESSION_NOTES_2026_09_05.md](CONSOLIDATED_SESSION_NOTES_2026_09_05.md) | Comprehensive session notes and changelog covering power-button reboot, VHDX setup, automount automation, and HITL artifact curation. |
 | `session_notes.md` | [CONSOLIDATED_SESSION_NOTES_2026_10_18.md](CONSOLIDATED_SESSION_NOTES_2026_10_18.md) | Detailed technical notes covering Herdr installation, background DLL initialization diagnostics, agent skill configuration, and SSH port 2222 key authorization. |
 
+| `reboot_state.md` | [PRE_REBOOT_VHDX_STATE_2026_09_05.md](PRE_REBOOT_VHDX_STATE_2026_09_05.md) | Pre-reboot checkpoint documenting MATLAB migration to F:\MATLAB.vhdx (M:), desktop heap exhaustion, and post-reboot recovery for F:\archives.vhdx. |
