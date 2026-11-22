@@ -3,10 +3,6 @@
     {
       "image": "/rescuezilla-2.6.1-64bit.oracular.iso",
       "backend": "/rescuezilla-persistence.dat"
-    },
-    {
-      "image": "/rescuezilla-2.6.2-64bit.noble.iso",
-      "backend": "/rescuezilla-persistence.dat"
     }
   ],
   "menu_alias": [
@@ -15,20 +11,32 @@
       "alias": ">>> Super Grub2 Disk (Auto-Detect All OSes)"
     },
     {
-      "image": "/gparted-live-1.6.0-10-amd64.iso",
-      "alias": ">>> GParted Live (Partition & Drive Manager)"
-    },
-    {
-      "image": "/clonezilla-live-3.2.0-5-amd64.iso",
-      "alias": ">>> Clonezilla Live (Disk Imaging CLI)"
-    },
-    {
       "image": "/rescuezilla-2.6.1-64bit.oracular.iso",
       "alias": ">>> Rescuezilla 2.6.1 Live GUI (+Persistence)"
     },
     {
-      "image": "/HBCD_PE_x64 2018.iso",
-      "alias": ">>> Hiren's BootCD PE x64 (Windows Rescue)"
+      "image": "/MX-25_Xfce_ahs_x64.iso",
+      "alias": ">>> MX Linux 25 Xfce (AHS Kernel)"
+    },
+    {
+      "image": "/ubuntu-24.04.3-live-server-amd64.iso",
+      "alias": ">>> Ubuntu 24.04.3 LTS Server (Live)"
+    },
+    {
+      "image": "/ubuntu-20.04.2.0-desktop-amd64.iso",
+      "alias": ">>> Ubuntu 20.04.2 LTS Desktop (Live)"
+    },
+    {
+      "image": "/debian-live-10.10.0-amd64-xfce.iso",
+      "alias": ">>> Debian 10.10 Live Xfce"
+    },
+    {
+      "image": "/Fedora-Workstation-Live-x86_64-33-1.2.iso",
+      "alias": ">>> Fedora 33 Workstation Live"
+    },
+    {
+      "image": "/linuxmint-19-cinnamon-64bit-v2.iso",
+      "alias": ">>> Linux Mint 19 Cinnamon (Live)"
     }
   ]
 }
