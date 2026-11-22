@@ -44,7 +44,7 @@ KEY_FILE="${SCRIPT_DIR}/id_rsa"
 
 # Locate SSH Key
 if [ ! -f "$KEY_FILE" ]; then
-    for candidate in "/scripts/id_rsa" "/home/ubuntu/.ssh/id_rsa" "/home/ubuntu/scripts/id_rsa" "${SCRIPT_DIR}/id_rsa"; do
+    for candidate in "/scripts/id_rsa" "/home/alan/.ssh/id_rsa" "/home/ubuntu/.ssh/id_rsa" "/home/ubuntu/scripts/id_rsa" "${SCRIPT_DIR}/id_rsa"; do
         if [ -f "$candidate" ]; then
             KEY_FILE="$candidate"
             break
@@ -53,7 +53,7 @@ if [ ! -f "$KEY_FILE" ]; then
 fi
 
 if [ ! -f "$KEY_FILE" ]; then
-    KEY_FILE=$(find /media /mnt /home -name "id_rsa" 2>/dev/null | head -n 1)
+    KEY_FILE=$(find /media/devmon /media/ubuntu /home/ubuntu -maxdepth 3 -name "id_rsa" 2>/dev/null | head -n 1 || echo "")
 fi
 
 # POSIX Input Validation Helpers
@@ -69,9 +69,15 @@ prompt_yes_no() {
             continue
         fi
         case "$answer" in
-            y|yes) return 0 ;;
-            n|no)  return 1 ;;
-            *) echo -e "  ${RED}⚠️  Invalid input '$answer'. Please type 'y' (yes) or 'n' (no).${RESET}" ;;
+            y|yes)
+                return 0
+                ;;
+            n|no)
+                return 1
+                ;;
+            *)
+                echo -e "  ${RED}⚠️  Invalid input '$answer'. Please type 'y' (yes) or 'n' (no).${RESET}"
+                ;;
         esac
     done
 }
@@ -84,21 +90,22 @@ prompt_choice() {
     while true; do
         echo -en "${prompt_msg}" >&2
         read -r choice
-        choice="$(echo "$choice" | xargs)"
+        choice="${choice#"${choice%%[![:space:]]*}"}"
+        choice="${choice%"${choice##*[![:space:]]}"}"
         if [ -z "$choice" ]; then
-            echo -e "  ${YELLOW}⚠️  Empty input (Return key) rejected. Type a number between ${min_val} and ${max_val}.${RESET}" >&2
+            echo -e "  ${YELLOW}⚠️  Empty input (Return key) rejected. Type a number between ${min_val} and ${max_val} (or 0).${RESET}" >&2
             continue
         fi
         case "$choice" in
             *[!0-9]*|"")
-                echo -e "  ${RED}⚠️  Invalid input '$choice'. Please type a number between ${min_val} and ${max_val}.${RESET}" >&2
+                echo -e "  ${RED}⚠️  Invalid input '$choice'. Please type a number between ${min_val} and ${max_val} (or 0).${RESET}" >&2
                 ;;
             *)
-                if [ "$choice" -ge "$min_val" ] && [ "$choice" -le "$max_val" ]; then
+                if ( [ "$choice" -ge "$min_val" ] && [ "$choice" -le "$max_val" ] ) || [ "$choice" -eq 0 ]; then
                     echo "$choice"
                     return 0
                 else
-                    echo -e "  ${RED}⚠️  Invalid option '$choice'. Please type a number between ${min_val} and ${max_val}.${RESET}" >&2
+                    echo -e "  ${RED}⚠️  Invalid option '$choice'. Please type a number between ${min_val} and ${max_val} (or 0).${RESET}" >&2
                 fi
                 ;;
         esac
@@ -159,9 +166,9 @@ while true; do
     echo -e "----------------------------------------------------------------------"
     echo -e "  ${BOLD}Storage & Diagnostic Utilities:${RESET}"
     echo -e "  ${CYAN}[6]${RESET} 🌐 ${BOLD}Connect Network Storage${RESET} (Mount home40/Clonezilla share via SSHFS)"
-    echo -e "  ${CYAN}[7]${RESET} 💾 ${BOLD}Mount Local Storage${RESET}     (Mount SHARED FAT and Internal HDD ro)"
+    echo -e "  ${CYAN}[7]${RESET} 💾 ${BOLD}Mount Local Storage${RESET}     (Mount USB Data Partition and Internal HDD ro)"
     echo -e "  ${CYAN}[8]${RESET} 📋 ${BOLD}Post-Backup Wizard${RESET}      (Examine backup manifests & disk health)"
-    echo -e "  ${CYAN}[9]${RESET} 📦 ${BOLD}Export Diagnostic Bundle${RESET} (Harvest logs, serial & telemetry to SHARED FAT)"
+    echo -e "  ${CYAN}[9]${RESET} 📦 ${BOLD}Export Diagnostic Bundle${RESET} (Harvest logs, telemetry & SMART to USB Data Partition)"
     echo -e "  ${CYAN}[10]${RESET} 🖥️  ${BOLD}Launch Rescuezilla GUI${RESET}  (Native Rescuezilla graphical window)"
     echo -e "  ${CYAN}[0]${RESET} 🚪 Exit"
     echo -e "${CYAN}======================================================================${RESET}"
@@ -174,12 +181,25 @@ while true; do
             # Backup
             echo -e "\n${BOLD}>>> Launching Backup Assistant...${RESET}"
             ensure_network_mount || true
-            if [ -f "${SCRIPT_DIR}/run_rescuezilla_backup_cli.sh" ]; then
-                bash "${SCRIPT_DIR}/run_rescuezilla_backup_cli.sh"
-            elif [ -f "/scripts/run_rescuezilla_backup_cli.sh" ]; then
-                bash "/scripts/run_rescuezilla_backup_cli.sh"
+            BACKUP_SCRIPT=""
+            for cand in \
+                "${SCRIPT_DIR}/run_rescuezilla_backup_cli.sh" \
+                "/media/ubuntu/ntfs_usb/run_rescuezilla_backup_cli.sh" \
+                "/home/ubuntu/ntfs_usb/run_rescuezilla_backup_cli.sh" \
+                "/media/ubuntu/2C95D29B2DF0500E/run_rescuezilla_backup_cli.sh" \
+                "/media/devmon/Ventoy/run_rescuezilla_backup_cli.sh" \
+                "/media/devmon/sdb4-usb-Generic-_SD_MMC_/run_rescuezilla_backup_cli.sh" \
+                "/scripts/run_rescuezilla_backup_cli.sh"; do
+                if [ -r "$cand" ] && head -n 1 "$cand" | grep -q "bash"; then
+                    BACKUP_SCRIPT="$cand"
+                    break
+                fi
+            done
+            if [ -n "$BACKUP_SCRIPT" ]; then
+                echo -e "  ${GREEN}✓ Executing:${RESET} $BACKUP_SCRIPT"
+                bash "$BACKUP_SCRIPT"
             else
-                echo -e "${YELLOW}Falling back to Clonezilla ocs-sr wizard...${RESET}"
+                echo -e "${YELLOW}Notice: Direct CLI backup script not found or unreadable. Launching Clonezilla ocs-sr wizard...${RESET}"
                 sudo ocs-sr -x || sudo rescuezilla
             fi
             ;;
@@ -191,7 +211,9 @@ while true; do
             echo -e "  ${CYAN}[1]${RESET} Clonezilla Native CLI (ocs-sr restoreparts / restoredisk)"
             echo -e "  ${CYAN}[2]${RESET} Rescuezilla GUI Guided Restore"
             r_eng=$(prompt_choice "  Select engine [1-2]: " 1 2)
-            if [ "$r_eng" = "1" ]; then
+            if [ "$r_eng" = "0" ]; then
+                continue
+            elif [ "$r_eng" = "1" ]; then
                 echo -e "\n${BOLD}Starting Clonezilla interactive restore wizard...${RESET}"
                 sudo ocs-sr -g auto -e1 auto -e2 -c -j2 -p true restoredisk
             else
@@ -210,7 +232,9 @@ while true; do
             echo -e "  ${CYAN}[1]${RESET} Clonezilla Native Clone Wizard (ocs-onthefly)"
             echo -e "  ${CYAN}[2]${RESET} Rescuezilla GUI Clone Wizard"
             c_eng=$(prompt_choice "  Select engine [1-2]: " 1 2)
-            if [ "$c_eng" = "1" ]; then
+            if [ "$c_eng" = "0" ]; then
+                continue
+            elif [ "$c_eng" = "1" ]; then
                 sudo ocs-onthefly
             else
                 if command -v rescuezillapy >/dev/null 2>&1; then
@@ -229,7 +253,9 @@ while true; do
             echo -e "\n  ${CYAN}[1]${RESET} Clonezilla Native Verify (ocs-chkimg)"
             echo -e "  ${CYAN}[2]${RESET} Rescuezilla GUI Verify Tool"
             v_eng=$(prompt_choice "  Select verify method [1-2]: " 1 2)
-            if [ "$v_eng" = "1" ]; then
+            if [ "$v_eng" = "0" ]; then
+                continue
+            elif [ "$v_eng" = "1" ]; then
                 echo -en "  Enter image directory name to verify: "
                 read -r img_name
                 if [ -n "$img_name" ] && [ -d "/home/partimag/$img_name" ]; then
@@ -255,6 +281,9 @@ while true; do
             echo -e "\n  ${CYAN}[1]${RESET} Select and Mount Specific Image (CLI + File Browser)"
             echo -e "  ${CYAN}[2]${RESET} Open Native Rescuezilla GUI Wizard"
             exp_choice=$(prompt_choice "  Select mode [1-2]: " 1 2)
+            if [ "$exp_choice" = "0" ]; then
+                continue
+            fi
 
             if [ "$exp_choice" = "1" ] && command -v rescuezillapy >/dev/null 2>&1; then
                 mapfile -t img_list < <(find /home/partimag -maxdepth 1 -mindepth 1 -type d -exec basename {} \; 2>/dev/null | sort)
@@ -270,6 +299,9 @@ while true; do
                         idx=$((idx + 1))
                     done
                     sel_idx=$(prompt_choice "  Select image to explore [1-${#img_list[@]}]: " 1 "${#img_list[@]}")
+                    if [ "$sel_idx" = "0" ]; then
+                        continue
+                    fi
                     selected_img="${img_list[$((sel_idx - 1))]}"
                     mount_dest="/mnt/image_explorer_${selected_img}"
                     sudo mkdir -p "$mount_dest"
@@ -292,13 +324,15 @@ while true; do
             ;;
         7)
             # Mount Local Storage
-            echo -e "\n${BOLD}>>> Mounting Local USB FAT & Internal HDD (ro)...${RESET}"
+            echo -e "\n${BOLD}>>> Mounting Local USB Data Partition & Internal Disks (ro)...${RESET}"
             if [ -x /usr/local/bin/mount_storage_startup.sh ]; then
                 sudo /usr/local/bin/mount_storage_startup.sh
             elif [ -x "${SCRIPT_DIR}/mount_fat_and_hdd.sh" ]; then
                 sudo "${SCRIPT_DIR}/mount_fat_and_hdd.sh"
+            elif [ -x "${SCRIPT_DIR}/persistence_startup/mount_storage_startup.sh" ]; then
+                sudo "${SCRIPT_DIR}/persistence_startup/mount_storage_startup.sh"
             else
-                echo -e "${RED}Mount helper script not found.${RESET}"
+                remount_local_storage
             fi
             ;;
         8)
@@ -315,14 +349,20 @@ while true; do
         9)
             # Export Diagnostic Bundle
             echo -e "\n${BOLD}>>> Harvesting and Exporting Diagnostic Bundle...${RESET}"
-            if [ -x /usr/local/bin/export_vm_and_system_logs_to_fat.sh ]; then
+            if [ -x "${SCRIPT_DIR}/export_diagnostic_bundle.sh" ]; then
+                bash "${SCRIPT_DIR}/export_diagnostic_bundle.sh"
+            elif [ -x "/scripts/export_diagnostic_bundle.sh" ]; then
+                bash "/scripts/export_diagnostic_bundle.sh"
+            elif [ -x /usr/local/bin/export_vm_and_system_logs_to_fat.sh ]; then
                 sudo /usr/local/bin/export_vm_and_system_logs_to_fat.sh
             elif [ -x "${SCRIPT_DIR}/export_vm_and_system_logs_to_fat.sh" ]; then
                 sudo "${SCRIPT_DIR}/export_vm_and_system_logs_to_fat.sh"
             elif [ -x "/scripts/export_vm_and_system_logs_to_fat.sh" ]; then
                 sudo "/scripts/export_vm_and_system_logs_to_fat.sh"
+            elif [ -f "${SCRIPT_DIR}/post-backup-wizard.sh" ]; then
+                bash "${SCRIPT_DIR}/post-backup-wizard.sh" --bundle-only
             else
-                echo -e "${RED}export_vm_and_system_logs_to_fat.sh not found.${RESET}"
+                echo -e "${RED}Export tool not found.${RESET}"
             fi
             ;;
         10)

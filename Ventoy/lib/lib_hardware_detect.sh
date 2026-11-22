@@ -9,10 +9,25 @@
 detect_usb_device() {
     local dev=""
     # 1. Search for partition with label VTOYEFI or Ventoy
-    local p_boot
-    p_boot=$(lsblk -rno PATH,LABEL | grep -iE "VTOYEFI|Ventoy" | awk '{print $1}' | head -n 1)
+    local p_boot=""
+    local raw_p_boot
+    if raw_p_boot=$(lsblk -rno PATH,LABEL 2>/dev/null); then
+        # Parse lsblk output: find first PATH whose LABEL matches VTOYEFI or Ventoy
+        while IFS=' ' read -r path label; do
+            case "$label" in
+                [Vv][Tt][Oo][Yy][Ee][Ff][Ii]|[Vv][Ee][Nn][Tt][Oo][Yy]*)
+                    p_boot="$path"
+                    break
+                    ;;
+            esac
+        done <<< "$raw_p_boot"
+    fi
     if [ -n "$p_boot" ]; then
-        dev=$(lsblk -no PKNAME "$p_boot" 2>/dev/null || echo "")
+        if dev=$(lsblk -no PKNAME "$p_boot" 2>/dev/null); then
+            :
+        else
+            dev=""
+        fi
         if [ -n "$dev" ]; then
             echo "/dev/$dev"
             return 0
@@ -34,18 +49,32 @@ detect_data_partition() {
 
     if [ ! -b "$p4" ]; then
         # Try finding by known labels or UUIDs
-        p4=$(blkid -L "SHARED FAT" 2>/dev/null || blkid -U "2C95D29B2DF0500E" 2>/dev/null || blkid -U "C9D1-3C83" 2>/dev/null || echo "")
+        p4=""
+        if ! p4=$(blkid -L "SHARED FAT" 2>/dev/null); then
+            if ! p4=$(blkid -U "2C95D29B2DF0500E" 2>/dev/null); then
+                if ! p4=$(blkid -U "C9D1-3C83" 2>/dev/null); then
+                    p4=""
+                fi
+            fi
+        fi
     fi
 
-    if [ -z "$p4" ] || [ ! -b "$p4" ]; then
+    if [ -z "$p4" ] \
+        || [ ! -b "$p4" ]; then
         echo "Error: Data partition (Partition 4) could not be detected." >&2
         return 1
     fi
 
     DETECTED_P4_DEV="$p4"
-    DETECTED_P4_FS=$(blkid -s TYPE -o value "$p4" 2>/dev/null || echo "unknown")
-    DETECTED_P4_UUID=$(blkid -s UUID -o value "$p4" 2>/dev/null || echo "")
-    DETECTED_P4_LABEL=$(blkid -s LABEL -o value "$p4" 2>/dev/null || echo "")
+    if ! DETECTED_P4_FS=$(blkid -s TYPE -o value "$p4" 2>/dev/null); then
+        DETECTED_P4_FS="unknown"
+    fi
+    if ! DETECTED_P4_UUID=$(blkid -s UUID -o value "$p4" 2>/dev/null); then
+        DETECTED_P4_UUID=""
+    fi
+    if ! DETECTED_P4_LABEL=$(blkid -s LABEL -o value "$p4" 2>/dev/null); then
+        DETECTED_P4_LABEL=""
+    fi
 
     case "$DETECTED_P4_FS" in
         ntfs|fuseblk)
@@ -76,7 +105,9 @@ detect_data_partition() {
 # Mount the detected data partition cleanly with user permissions
 mount_detected_data_partition() {
     local custom_mount="${1:-}"
-    detect_data_partition || return 1
+    if ! detect_data_partition; then
+        return 1
+    fi
 
     local mnt="${custom_mount:-$DETECTED_P4_TARGET}"
     mkdir -p "$mnt"
@@ -90,3 +121,27 @@ mount_detected_data_partition() {
     $DETECTED_P4_DRIVER -o $DETECTED_P4_OPTS "$DETECTED_P4_DEV" "$mnt"
     return $?
 }
+
+# Dynamically detect hardware machine model (e.g. HP-EliteBook-8470p, HP-ZBook-15u-G5)
+detect_machine_model() {
+    local model=""
+    for p in "/sys/class/dmi/id/product_name" "/sys/devices/virtual/dmi/id/product_name"; do
+        if [ -f "$p" ]; then
+            local raw_model
+            raw_model=$(tr -s ' \t' '-' < "$p")
+            model=$(tr -cd '[:alnum:]-_' <<< "$raw_model")
+            if [ -n "$model" ] \
+                && [ "$model" != "None" ] \
+                && [ "$model" != "System-Product-Name" ]; then
+                echo "$model"
+                return 0
+            fi
+        fi
+    done
+    local host
+    if ! host=$(hostname -s 2>/dev/null); then
+        host="Host"
+    fi
+    echo "$host"
+}
+

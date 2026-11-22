@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# bashcov
+# Universal executable wrapper for bashcov Python package
+# ==============================================================================
+set -euo pipefail
+
+TOOL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PARENT_DIR="$(cd "${TOOL_DIR}/.." && pwd)"
+export PYTHONPATH="${PARENT_DIR}:${PYTHONPATH:-}"
+
+PYTHON_BIN="python3"
+if command -v uv >/dev/null 2>&1; then
+    exec uv run python -m bashcov.cli "$@"
+elif command -v python3 >/dev/null 2>&1; then
+    exec python3 -m bashcov.cli "$@"
+elif command -v python >/dev/null 2>&1; then
+    exec python -m bashcov.cli "$@"
+else
+    echo "Error: Python 3 not found." >&2
+    exit 1
+fi

@@ -1,0 +1,283 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# run_cumulative_suite.sh
+# Runs all expect test cases, aggregates coverage, captures all transcripts,
+# and generates merged lcov & HTML reports with branch coverage.
+# ==============================================================================
+set -uo pipefail
+# NOTE: -e is intentionally NOT set here so that individual test failures do not
+# abort the entire suite. Each test exit code is captured explicitly below.
+
+SCRIPT_DIR="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
+TESTS_DIR="$(readlink -f "${SCRIPT_DIR}/..")"
+VENTOY_DIR="$(readlink -f "${TESTS_DIR}/..")"
+OUT_DIR="${1:-${VENTOY_DIR}/coverage_results}"
+
+# Self-healing clean of prior artifacts, requesting sudo if owned by root
+if [ -d "$OUT_DIR" ]; then
+    if ! rm -f "${OUT_DIR}"/* 2>/dev/null; then
+        echo -e "[1;33m⚠️  Notice: Files in ${OUT_DIR} are owned by root from a previous privileged run.[0m"
+        echo "Prompting for sudo to clean previous artifacts..."
+        sudo rm -rf "$OUT_DIR"
+    fi
+fi
+
+mkdir -p "$OUT_DIR"
+MASTER_TRACE="${OUT_DIR}/master_trace.log"
+TRANSCRIPT_RAW="${OUT_DIR}/session_transcript_raw.log"
+TRANSCRIPT_CLEAN="${OUT_DIR}/session_transcript_clean.txt"
+
+rm -f "$MASTER_TRACE" "$TRANSCRIPT_RAW" "$TRANSCRIPT_CLEAN"
+touch "$MASTER_TRACE" "$TRANSCRIPT_RAW"
+chmod 666 "$MASTER_TRACE" "$TRANSCRIPT_RAW"
+
+echo "======================================================================"
+echo "    🧪 MASTER CUMULATIVE TEST & BRANCH COVERAGE SUITE (uv + expect)   "
+echo "======================================================================"
+echo "  • Tests Directory : ${TESTS_DIR}/cases"
+echo "  • Output Directory: ${OUT_DIR}"
+echo "======================================================================"
+
+# ==============================================================================
+# Pre-Flight Static Analysis (Multi-Command Linter)
+# Ensures scripts maintain 1-command-per-line discipline for 1:1 coverage hit fidelity
+# ==============================================================================
+BASHCOV_CLI="${VENTOY_DIR}/tools/bashcov/cli.py"
+if [ -f "$BASHCOV_CLI" ] \
+    && command -v python3 >/dev/null 2>&1; then
+    echo -e "\n[*] 🔍 Running Automated Pre-Flight Static Analysis (Multi-Command Linter)..."
+    LINT_TARGETS=(
+        "${VENTOY_DIR}/post-backup-wizard.sh"
+        "${VENTOY_DIR}/run_rescuezilla_backup_cli.sh"
+        "${VENTOY_DIR}/lib/lib_hardware_detect.sh"
+    )
+    # Only check files that exist
+    VALID_LINT_TARGETS=()
+    for lt in "${LINT_TARGETS[@]}"; do
+        if [ -f "$lt" ]; then
+            VALID_LINT_TARGETS+=("$lt")
+        fi
+    done
+
+    if [ ${#VALID_LINT_TARGETS[@]} -gt 0 ]; then
+        if ! python3 "$BASHCOV_CLI" lint "${VALID_LINT_TARGETS[@]}"; then
+            echo -e "\n\033[1;31m❌ Static Analysis Pre-Flight Check Failed!\033[0m"
+            echo -e "\033[1;33mMulti-command lines or subshell pipelines were detected that distort coverage metrics.\033[0m"
+            echo -e "Please reformat the flagged lines or run with SKIP_LINT=1 to bypass.\n"
+            if [ "${SKIP_LINT:-0}" != "1" ]; then
+                exit 1
+            else
+                echo -e "\033[1;33m⚠️  Warning: SKIP_LINT=1 set, proceeding despite violations...\033[0m\n"
+            fi
+        fi
+    fi
+fi
+
+# Global environment file loaded by subshells
+COV_ENV="/tmp/master_cov_env_$$.sh"
+cat << ENV_EOF > "$COV_ENV"
+export PS4='@@COV@@\${BASH_SOURCE[0]}@@\${LINENO}@@\n'
+exec 7>>"$MASTER_TRACE"
+export BASH_XTRACEFD=7
+set -x
+ENV_EOF
+chmod 644 "$COV_ENV"
+export BASH_ENV="$COV_ENV"
+
+cleanup() {
+    rm -f "$COV_ENV" 2>/dev/null || \
+        true
+    if [ -n "${SUDO_USER:-}" ] \
+        && [ -d "$OUT_DIR" ]; then
+        chown -R "${SUDO_USER}:${SUDO_USER}" "$OUT_DIR" 2>/dev/null || \
+            true
+    fi
+}
+trap cleanup EXIT
+
+# Run each test case sequentially — failures are captured and reported at the
+# end; they do NOT abort the loop so all 12 tests always run.
+PASS_COUNT=0
+FAIL_COUNT=0
+declare -a FAILED_TESTS=()
+
+for test_file in "${TESTS_DIR}/cases"/*.exp; do
+    if [ -f "$test_file" ]; then
+        tname=$(basename "$test_file")
+        echo -e "\n[*] Running: \033[1;36m${tname}\033[0m..."
+        {
+            echo "======================================================================"
+            echo ">>> TEST RUN: ${tname} [$(date '+%Y-%m-%d %H:%M:%S')]"
+            echo "======================================================================"
+            expect "$test_file"
+            echo ""
+        } >> "$TRANSCRIPT_RAW" 2>&1
+        test_exit=$?
+        if [ "$test_exit" -eq 0 ]; then
+            echo -e "    \033[1;32m✓ PASS\033[0m  ${tname}"
+            PASS_COUNT=$((PASS_COUNT + 1))
+        else
+            echo -e "    \033[1;31m✗ FAIL\033[0m  ${tname}  (exit ${test_exit})"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+            FAILED_TESTS+=("$tname")
+        fi
+    fi
+done
+
+echo ""
+echo "======================================================================"
+echo "  🧪 TEST SUITE RESULTS: ${PASS_COUNT} passed, ${FAIL_COUNT} failed"
+echo "======================================================================"
+if [ "${#FAILED_TESTS[@]}" -gt 0 ]; then
+    echo -e "  \033[1;31mFailed tests:\033[0m"
+    for ft in "${FAILED_TESTS[@]}"; do
+        echo -e "    \033[1;31m✗\033[0m $ft"
+    done
+fi
+
+# Generate clean text transcript
+sed -E 's/\x1B\[[0-9;]*[a-zA-Z]//g; s/\r//g' "$TRANSCRIPT_RAW" > "$TRANSCRIPT_CLEAN"
+echo -e "\n[+] Full Terminal Transcripts Saved:"
+echo "  • Raw Terminal Log   : ${TRANSCRIPT_RAW}"
+echo "  • Clean Text for Review: ${TRANSCRIPT_CLEAN}"
+
+echo -e "\n[*] Calculating cumulative line & branch coverage using uv..."
+uv run python - << PY_EOF
+import re
+import os
+
+trace_path = "$MASTER_TRACE"
+out_dir = "$OUT_DIR"
+file_lines = {}
+file_branches = {}
+file_functions = {}
+
+if os.path.exists(trace_path):
+    with open(trace_path, "r", errors="ignore") as f:
+        for line in f:
+            m = re.search(r"@@COV@@([^@]+)@@([0-9]+)@@", line)
+            if m:
+                fpath = os.path.abspath(m.group(1))
+                lineno = int(m.group(2))
+                if os.path.isfile(fpath) and "Ventoy" in fpath and not "tests" in fpath:
+                    if fpath not in file_lines:
+                        file_lines[fpath] = {}
+                    file_lines[fpath][lineno] = file_lines[fpath].get(lineno, 0) + 1
+
+for fpath in list(file_lines.keys()):
+    try:
+        with open(fpath, "r", errors="ignore") as src:
+            src_lines = src.readlines()
+    except Exception:
+        continue
+
+    branches = []
+    executed = set(file_lines[fpath].keys())
+    in_case = False
+    branch_num = 0
+
+    for idx, raw_line in enumerate(src_lines, start=1):
+        line = raw_line.strip()
+        if line.startswith("if ") or line.startswith("if [") or line.startswith("elif ") or line.startswith("elif ["):
+            next_idx = idx + 1
+            while next_idx <= len(src_lines) and not src_lines[next_idx - 1].strip():
+                next_idx += 1
+            then_hit = 1 if (idx in executed and next_idx in executed) else 0
+            else_hit = 1 if (idx in executed and not then_hit) else (1 if idx in executed else 0)
+            branches.append((idx, 0, then_hit))
+            branches.append((idx, 1, else_hit))
+        elif line.startswith("case ") and " in" in line:
+            in_case = True
+            branch_num = 0
+        elif in_case and line == "esac":
+            in_case = False
+        elif in_case and re.match(r"^[a-zA-Z0-9_*| -]+\)", line):
+            arm_hit = 1 if idx in executed else 0
+            branches.append((idx, branch_num, arm_hit))
+            branch_num += 1
+
+    file_branches[fpath] = branches
+
+    # Discover function declarations
+    funcs = []
+    for idx, raw_line in enumerate(src_lines, start=1):
+        m = re.match(r"^([a-zA-Z0-9_-]+)\s*\(\)\s*\{?", raw_line.strip())
+        if m:
+            funcs.append((idx, m.group(1)))
+    file_functions[fpath] = funcs
+
+lcov_path = os.path.join(out_dir, "coverage.info")
+with open(lcov_path, "w") as out:
+    for fpath in file_lines:
+        out.write(f"TN:\nSF:{fpath}\n")
+        with open(fpath, "r", errors="ignore") as src:
+            src_lines = src.readlines()
+
+        funcs = file_functions.get(fpath, [])
+        func_headers = {lnum for lnum, _ in funcs}
+        fn_hits = 0
+        for lnum, fname in funcs:
+            # Check if any line in the body after the declaration ran
+            # Determine body start: next executable line
+            body_hit = 0
+            for test_ln in range(lnum + 1, min(lnum + 10, len(src_lines) + 1)):
+                if test_ln in file_lines[fpath]:
+                    body_hit = file_lines[fpath][test_ln]
+                    break
+            out.write(f"FN:{lnum},{fname}\n")
+            out.write(f"FNDA:{body_hit},{fname}\n")
+            if body_hit > 0:
+                fn_hits += 1
+        if funcs:
+            out.write(f"FNF:{len(funcs)}\nFNH:{fn_hits}\n")
+
+        total_lines = 0
+        non_exec = {"fi", "done", "else", "do", "then", "esac", "{", "}", ";;", "in"}
+        for lnum, code in enumerate(src_lines, start=1):
+            code_strip = code.strip()
+            if not code_strip or code_strip.startswith("#") or code_strip in non_exec or lnum in func_headers:
+                continue
+            total_lines += 1
+            hits = file_lines[fpath].get(lnum, 0)
+            out.write(f"DA:{lnum},{hits}\n")
+        hits_count = sum(1 for lnum in file_lines[fpath] if src_lines[lnum - 1].strip() not in non_exec and not src_lines[lnum - 1].strip().startswith("#") and lnum not in func_headers)
+        out.write(f"LF:{total_lines}\nLH:{hits_count}\n")
+
+        branches = file_branches.get(fpath, [])
+        if branches:
+            br_hit_count = 0
+            for lnum, brid, taken in branches:
+                out.write(f"BRDA:{lnum},0,{brid},{taken}\n")
+                if taken > 0:
+                    br_hit_count += 1
+            out.write(f"BRF:{len(branches)}\nBRH:{br_hit_count}\n")
+        out.write("end_of_record\n")
+
+print(f"\n[+] Cumulative Coverage Report Generated: {lcov_path}")
+for fp in sorted(file_lines.keys()):
+    br_list = file_branches.get(fp, [])
+    br_hits = sum(1 for _, _, taken in br_list if taken > 0)
+    print(f"  • {os.path.basename(fp)}: {len(file_lines[fp])} lines, {br_hits}/{len(br_list)} branches covered")
+
+PY_EOF
+
+# Generate HTML report
+if command -v genhtml >/dev/null 2>&1 \
+    && [ -f "${OUT_DIR}/coverage.info" ]; then
+    HTML_DIR="${OUT_DIR}/html"
+    mkdir -p "$HTML_DIR"
+    echo -e "\n[*] Generating HTML coverage report with Branch Coverage enabled..."
+    genhtml "${OUT_DIR}/coverage.info" \
+        --output-directory "$HTML_DIR" \
+        --title "Cumulative Rescuezilla Coverage" \
+        --branch-coverage \
+        --legend \
+        --show-details || \
+        true
+    echo "  • Browsable HTML : ${HTML_DIR}/index.html"
+fi
+
+# Exit non-zero if any test failed — allows callers to detect failures
+if [ "$FAIL_COUNT" -gt 0 ]; then
+    exit 1
+fi

@@ -36,7 +36,9 @@ USB_DEV="$(detect_usb_device 2>/dev/null || echo "/dev/sdb")"
 # Dynamic ISO Discovery
 ISO_PATH=""
 for iso_cand in \
+    "/media/devmon/sdb4-usb-Generic-_SD_MMC_/Ventoy images/rescuezilla-2.6.1-64bit.oracular.iso" \
     "/media/devmon/Ventoy/rescuezilla-2.6.2-64bit.noble.iso" \
+    "/media/devmon/Ventoy/rescuezilla-2.6.1-64bit.oracular.iso" \
     "/media/alan/Ventoy1/rescuezilla-2.6.1-64bit.oracular.iso" \
     "/media/alan/Ventoy/rescuezilla-2.6.2-64bit.noble.iso"; do
     if [ -f "$iso_cand" ]; then
@@ -44,24 +46,19 @@ for iso_cand in \
         break
     fi
 done
-if [ -z "$ISO_PATH" ]; then
-    ISO_PATH=$(find /media /mnt -name "*rescuezilla*.iso" 2>/dev/null | head -n 1)
-fi
 
 # Dynamic Persistence Discovery
 PERSIST_IMG=""
 for dat_cand in \
     "/media/devmon/Ventoy/rescuezilla-persistence.dat" \
     "/media/alan/Ventoy1/rescuezilla-persistence.dat" \
-    "/media/alan/Ventoy/rescuezilla-persistence.dat"; do
+    "/media/alan/Ventoy/rescuezilla-persistence.dat" \
+    "${SCRIPT_DIR}/rescuezilla-persistence.dat"; do
     if [ -f "$dat_cand" ]; then
         PERSIST_IMG="$dat_cand"
         break
     fi
 done
-if [ -z "$PERSIST_IMG" ]; then
-    PERSIST_IMG=$(find /media /mnt -name "*persistence*.dat" 2>/dev/null | head -n 1)
-fi
 
 VNC_PORT="5901"
 SSH_PORT="2222"
@@ -196,7 +193,9 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 if [ "$boot_choice" = "1" ]; then
-    echo -e "\n[*] Initializing Option A: Creating transient CoW overlay for /dev/sdb..."
+    echo -e "\n[*] Flushing kernel disk buffers before snapshot..."
+    sync
+    echo -e "[*] Initializing Option A: Creating transient CoW overlay for ${USB_DEV}..."
     qemu-img create -f qcow2 -b "$USB_DEV" -F raw "$TEMP_COW" >/dev/null
     QEMU_ARGS+=(
         -drive "file=${TEMP_COW},format=qcow2,if=virtio,cache=writeback"
@@ -208,7 +207,15 @@ else
         echo -e "${RED}Error: Rescuezilla ISO not found at $ISO_PATH${RESET}"
         exit 1
     fi
-    BOOT_DIR="/media/alan/Ventoy1/boot_cache"
+    BOOT_DIR="/media/devmon/Ventoy/boot_cache"
+    if [ ! -d "$BOOT_DIR" ]; then
+        for cand_dir in "/media/alan/Ventoy1/boot_cache" "/media/alan/Ventoy/boot_cache" "${SCRIPT_DIR}/boot_cache"; do
+            if [ -d "$cand_dir" ]; then
+                BOOT_DIR="$cand_dir"
+                break
+            fi
+        done
+    fi
     if [ -f "${BOOT_DIR}/vmlinuz" ] && [ -f "${BOOT_DIR}/initrd.lz" ]; then
         echo -e "  • Using direct kernel launch with persistent overlay parameter..."
         QEMU_ARGS+=(
@@ -255,17 +262,23 @@ case "$stor_choice" in
 esac
 
 # Configure Display
-# Auto-detect host display & authority
 HOST_USER="${SUDO_USER:-$USER}"
 HOST_UID=$(id -u "$HOST_USER" 2>/dev/null || echo "1000")
-if [ -z "$DISPLAY" ]; then
-    export DISPLAY=":0"
-fi
-if [ -z "$XAUTHORITY" ]; then
+
+# Ensure DISPLAY is set
+export DISPLAY="${DISPLAY:-:0}"
+
+# Auto-detect Xauthority for Wayland / X11
+if [ -z "${XAUTHORITY:-}" ] || [ ! -f "$XAUTHORITY" ]; then
     AUTH_CAND=$(ls /run/user/"$HOST_UID"/.mutter-Xwaylandauth.* /run/user/"$HOST_UID"/gdm/Xauthority /home/"$HOST_USER"/.Xauthority 2>/dev/null | head -n 1)
-    if [ -n "$AUTH_CAND" ]; then
+    if [ -n "$AUTH_CAND" ] && [ -f "$AUTH_CAND" ]; then
         export XAUTHORITY="$AUTH_CAND"
     fi
+fi
+
+# Authorize root on host display if run via sudo
+if [ -n "$SUDO_USER" ]; then
+    sudo -u "$SUDO_USER" DISPLAY="$DISPLAY" xhost +si:localuser:root >/dev/null 2>&1 || true
 fi
 
 if [ "$disp_choice" = "1" ]; then
@@ -279,7 +292,12 @@ if [ "$disp_choice" = "1" ]; then
     echo -e "  • Serial Log: ${VM_SERIAL_LOG}"
     echo -e "  • QEMU Log:   ${VM_QEMU_LOG}"
     echo -e "${GREEN}======================================================================${RESET}"
-    qemu-system-x86_64 "${QEMU_ARGS[@]}" 2>>"$VM_QEMU_LOG"
+    if ! qemu-system-x86_64 "${QEMU_ARGS[@]}" 2>>"$VM_QEMU_LOG"; then
+        echo -e "${RED}✗ Error: QEMU terminated with an error.${RESET}"
+        echo -e "${YELLOW}--- QEMU Log (/tmp/qemu_rescuezilla_vm.log) ---${RESET}"
+        cat "$VM_QEMU_LOG"
+        echo -e "${YELLOW}-----------------------------------------------${RESET}"
+    fi
 else
     echo -e "\n[+] Launching QEMU with TigerVNC Server on localhost:${VNC_PORT}..."
     QEMU_ARGS+=(
@@ -300,8 +318,9 @@ else
     
     # Try spawning viewer if DISPLAY is accessible
     if [ -n "$DISPLAY" ]; then
-        echo -e "[*] Spawning TigerVNC Viewer..."
-        vncviewer "localhost:${VNC_PORT}" 2>/dev/null || xtigervncviewer "localhost:${VNC_PORT}" 2>/dev/null || true &
+        echo -e "[*] Spawning TigerVNC Viewer (Auto-Fit & Dynamic Rescaling enabled)..."
+        echo -e "${DIM}  ℹ️  Tip: Press F8 in the TigerVNC window to toggle Full Screen or access Options.${RESET}"
+        vncviewer -RemoteResize=1 "localhost:${VNC_PORT}" 2>/dev/null || xtigervncviewer -RemoteResize=1 "localhost:${VNC_PORT}" 2>/dev/null || true &
     fi
     
     wait $VM_PID 2>/dev/null || true

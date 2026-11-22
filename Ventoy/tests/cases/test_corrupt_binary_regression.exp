@@ -1,0 +1,67 @@
+#!/usr/bin/expect -f
+# ==============================================================================
+# test_corrupt_binary_regression.exp
+# REGRESSION TEST: Asserts that an invalid/corrupt binary or truncated script
+# placed at /scripts/run_rescuezilla_backup_cli.sh does NOT cause exit status 126
+# ("cannot execute binary file") when launching Option 1 in rescue_suite_launcher.sh.
+# It asserts that:
+#   1. Corrupt files failing the bash header check are cleanly bypassed.
+#   2. Valid backup runners or the safe fallback wizard are launched without crashing.
+#   3. Never aborts with status 126.
+# ==============================================================================
+
+set timeout 20
+set test_dir "/tmp/test_regression_sandbox"
+
+send_user "\n=== REGRESSION TEST: Corrupt /scripts/ File & Status 126 Prevention ===\n"
+
+# Setup isolated sandbox simulating corrupt overlay file
+exec rm -rf $test_dir
+exec mkdir -p $test_dir/scripts
+
+# Create a corrupt non-bash file with binary garbage at sandbox scripts directory
+set fd [open "$test_dir/scripts/run_rescuezilla_backup_cli.sh" "w"]
+puts $fd "\x7fELF\x02\x01\x01\x00corrupt_binary_payload_triggering_status_126"
+close $fd
+exec chmod +x "$test_dir/scripts/run_rescuezilla_backup_cli.sh"
+
+set real_launcher "/home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/rescue_suite_launcher.sh"
+
+# Run rescue_suite_launcher with mocked environment where SCRIPT_DIR has corrupt binary
+spawn bash -c "export SCRIPT_DIR='$test_dir/scripts'; bash '$real_launcher'"
+
+expect {
+    -re "Enter your selection.*:" {
+        send_user "\nPASS: Reached Rescue Suite Main Menu.\n"
+        # Select Option 1 (Backup Assistant)
+        send "1\r"
+    }
+    timeout {
+        send_user "\nFAIL: Timeout waiting for selection menu.\n"
+        exit 1
+    }
+}
+
+expect {
+    "cannot execute binary file" {
+        send_user "\n🚨 REGRESSION DETECTED! Option 1 attempted to execute corrupt binary file (Status 126)!\n"
+        exit 126
+    }
+    "status 126" {
+        send_user "\n🚨 REGRESSION DETECTED! Process failed with status 126!\n"
+        exit 126
+    }
+    -re "(Executing:.*run_rescuezilla_backup_cli|LIVE COMMAND-LINE BACKUP ASSISTANT|Falling back to Clonezilla ocs-sr)" {
+        send_user "\nPASS: Bypassed corrupt binary safely; cleanly invoked valid backup runner or safe wizard fallback.\n"
+    }
+    timeout {
+        send_user "\nFAIL: Timeout during Option 1 backup launch.\n"
+        exit 1
+    }
+}
+
+# Clean up sandbox
+exec rm -rf $test_dir
+
+send_user "\n=== REGRESSION TEST PASSED: Status 126 successfully prevented ===\n"
+exit 0

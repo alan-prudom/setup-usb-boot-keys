@@ -16,6 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Find persistence container
 IMG=""
 for candidate in \
+    "/media/devmon/Ventoy/rescuezilla-persistence.dat" \
     "/media/alan/Ventoy1/rescuezilla-persistence.dat" \
     "/media/alan/Ventoy/rescuezilla-persistence.dat" \
     "${SCRIPT_DIR}/rescuezilla-persistence.dat"; do
@@ -25,12 +26,8 @@ for candidate in \
     fi
 done
 
-if [ -z "$IMG" ]; then
-    IMG=$(find /media /mnt -name "rescuezilla-persistence.dat" 2>/dev/null | head -n 1)
-fi
-
 if [ -z "$IMG" ] || [ ! -f "$IMG" ]; then
-    echo "Error: rescuezilla-persistence.dat not found."
+    echo "Error: rescuezilla-persistence.dat not found in standard paths (/media/devmon/Ventoy, ${SCRIPT_DIR})."
     exit 1
 fi
 
@@ -78,10 +75,13 @@ for TDIR in "${TARGET_DIRS[@]}"; do
         "run_rescuezilla_backup_cli.sh" \
         "post-backup-wizard.sh" \
         "sda_rescue_backup.sh" \
-        "sda5_rescue_backup.sh" \
         "mount_home40_backup.sh" \
         "mount_fat_and_hdd.sh" \
         "export_vm_and_system_logs_to_fat.sh" \
+        "export_diagnostic_bundle.sh" \
+        "obd_preflight_check.sh" \
+        "run_with_coverage.sh" \
+        "live_rescue_hub.sh" \
         "rescue_suite_launcher.sh"; do
         if [ -f "${SCRIPT_DIR}/${script_file}" ]; then
             cp "${SCRIPT_DIR}/${script_file}" "$TDIR/scripts/"
@@ -89,6 +89,18 @@ for TDIR in "${TARGET_DIRS[@]}"; do
             ln -sf "/scripts/${script_file}" "$TDIR/usr/local/bin/${script_file}"
         fi
     done
+    if [ -f "${SCRIPT_DIR}/persistence_startup/sync_and_launch.sh" ]; then
+        cp "${SCRIPT_DIR}/persistence_startup/sync_and_launch.sh" "$TDIR/usr/local/bin/sync_and_launch.sh"
+        chmod +x "$TDIR/usr/local/bin/sync_and_launch.sh"
+    fi
+    if [ -d "${SCRIPT_DIR}/lib" ]; then
+        mkdir -p "$TDIR/scripts/lib"
+        cp -a "${SCRIPT_DIR}/lib/"* "$TDIR/scripts/lib/" 2>/dev/null || true
+    fi
+    if [ -d "${SCRIPT_DIR}/tests" ]; then
+        mkdir -p "$TDIR/scripts/tests"
+        cp -a "${SCRIPT_DIR}/tests/"* "$TDIR/scripts/tests/" 2>/dev/null || true
+    fi
 
     # 2. Tier 2: Startup Mount Automation Script
     cat << 'INNER_EOF' > "$TDIR/usr/local/bin/mount_storage_startup.sh"
@@ -202,13 +214,10 @@ SVC_EOF
     ln -sf "/etc/systemd/system/mount-storage-startup.service" "$TDIR/etc/systemd/system/multi-user.target.wants/mount-storage-startup.service"
 
     # Enable SSH service in systemd
-    if [ -f "$TDIR/lib/systemd/system/ssh.service" ]; then
-        ln -sf "/lib/systemd/system/ssh.service" "$TDIR/etc/systemd/system/multi-user.target.wants/ssh.service"
-    elif [ -f "$TDIR/lib/systemd/system/sshd.service" ]; then
-        ln -sf "/lib/systemd/system/sshd.service" "$TDIR/etc/systemd/system/multi-user.target.wants/ssh.service"
-    else
-        ln -sf "/lib/systemd/system/ssh.service" "$TDIR/etc/systemd/system/multi-user.target.wants/ssh.service" 2>/dev/null || true
-    fi
+    ln -sf "/usr/lib/systemd/system/ssh.service" "$TDIR/etc/systemd/system/multi-user.target.wants/ssh.service" 2>/dev/null || true
+
+    # Fix display-manager.service symlink to point directly to /usr/lib/systemd/system/lightdm.service
+    ln -sf "/usr/lib/systemd/system/lightdm.service" "$TDIR/etc/systemd/system/display-manager.service" 2>/dev/null || true
 
     # B) XDG Desktop Autostart
     mkdir -p "$TDIR/etc/xdg/autostart"
@@ -235,6 +244,26 @@ XDG_EOF
     mkdir -p "$TDIR/home/ubuntu/Desktop"
     # Remove obsolete desktop entries that produce "no valid Exec line" error
     rm -f "$TDIR/home/ubuntu/Desktop/mount-ntfs.desktop" "$TDIR/etc/xdg/autostart/mount-ntfs.desktop"
+
+    # Deploy comfortable font (Monospace 10) & unlimited scrollback & zoom shortcuts
+    mkdir -p "$TDIR/home/ubuntu/.config/xfce4/terminal" "$TDIR/root/.config/xfce4/terminal"
+    cat << 'TERM_RC' > "$TDIR/home/ubuntu/.config/xfce4/terminal/terminalrc"
+[Configuration]
+FontName=Monospace 10
+MiscDefaultGeometry=120x36
+ScrollingUnlimited=TRUE
+ShortcutsZoomIn=<Primary><Shift>plus
+ShortcutsZoomOut=<Primary>minus
+ShortcutsZoomReset=<Primary>0
+MiscAlwaysShowTabs=FALSE
+MiscBell=FALSE
+MiscConfirmClose=TRUE
+MiscCursorBlinks=FALSE
+MiscCursorShape=TERMINAL_CURSOR_SHAPE_BLOCK
+MiscShowUnsafePasteDialog=FALSE
+TitleMode=TERMINAL_TITLE_REPLACE
+TERM_RC
+    cp "$TDIR/home/ubuntu/.config/xfce4/terminal/terminalrc" "$TDIR/root/.config/xfce4/terminal/terminalrc"
 
     # Fix malformed xfce4-terminal.desktop (missing Exec in [Desktop Action preferences])
     for term_file in "$TDIR/home/ubuntu/.local/share/applications/xfce4-terminal.desktop" "$TDIR/home/ubuntu/Desktop/xfce4-terminal.desktop"; do
@@ -263,6 +292,13 @@ XDG_EOF
             cat "${SSH_KEY}.pub" >> "$TDIR/root/.ssh/authorized_keys"
             chmod 600 "$TDIR/home/ubuntu/.ssh/authorized_keys" "$TDIR/root/.ssh/authorized_keys"
         fi
+    fi
+
+    # 5b. Ensure nbd module loads on boot (without touching /lib to prevent UsrMerge masking)
+    mkdir -p "$TDIR/etc"
+    rm -rf "$TDIR/lib" 2>/dev/null || true
+    if [ ! -f "$TDIR/etc/modules" ] || ! grep -q "^nbd" "$TDIR/etc/modules"; then
+        echo "nbd" >> "$TDIR/etc/modules"
     fi
 
     # 6. Install OpenSSH Server Binaries into Persistence

@@ -1,0 +1,332 @@
+@@COV@@@@1@@
+bash /scripts/run_rescuezilla_backup_cli.sh
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@7@@
+set -e
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@10@@
+BOLD='\033[1m'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@11@@
+GREEN='\033[1;32m'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@12@@
+YELLOW='\033[1;33m'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@13@@
+RED='\033[1;31m'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@14@@
+CYAN='\033[1;36m'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@15@@
+DIM='\033[2m'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@16@@
+RESET='\033[0m'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@67@@
+clear
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@68@@
+echo -e '\033[1;36m======================================================================\033[0m'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@69@@
+echo -e '\033[1m       🚀 LIVE COMMAND-LINE BACKUP ASSISTANT (RESCUE/CLONE)          \033[0m'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@70@@
+echo -e '\033[1;36m======================================================================\033[0m'
+@@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@73@@
+dirname /scripts/run_rescuezilla_backup_cli.sh
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@73@@
+cd /scripts
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@73@@
+pwd
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@73@@
+SCRIPT_DIR=/scripts
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@74@@
+'[' -f /scripts/lib/lib_hardware_detect.sh ']'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@75@@
+source /scripts/lib/lib_hardware_detect.sh
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@80@@
+KEY_FILE=/scripts/id_rsa
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@81@@
+REMOTE_SERVER=192.168.1.34
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@82@@
+REMOTE_PATH=/media/alan/home40/Clonezilla
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@83@@
+MOUNT_POINT=/mnt/backup
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@84@@
+LOG_DIR=/scripts
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@86@@
+'[' '!' -f /scripts/id_rsa ']'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@95@@
+'[' '!' -f /scripts/id_rsa ']'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@99@@
+'[' -z /scripts/id_rsa ']'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@99@@
+'[' '!' -f /scripts/id_rsa ']'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@104@@
+chmod 600 /scripts/id_rsa
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@105@@
+echo -e '\033[1;32m✓ SSH Identity Key:\033[0m /scripts/id_rsa'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@108@@
+echo -e '\n\033[1m[1/4] Remote Network Storage Connection\033[0m'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@109@@
+echo -e '\033[2m  ℹ️  Why this is needed: Mounts the backup destination on 192.168.1.34 (/media/alan/home40/Clonezilla) via SSHFS so images can be written directly over the LAN without filling local RAM or flash drives.\033[0m'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@110@@
+mkdir -p /mnt/backup
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@112@@
+mountpoint -q /mnt/backup
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@118@@
+sshfs -o identityfile=/scripts/id_rsa,allow_other,StrictHostKeyChecking=no,reconnect alan@192.168.1.34:/media/alan/home40/Clonezilla /mnt/backup
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@122@@
+date +%s
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@122@@
+TEST_FILE=/mnt/backup/.write_test_1788813188
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@123@@
+touch /mnt/backup/.write_test_1788813188
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@123@@
+rm -f /mnt/backup/.write_test_1788813188
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@124@@
+echo -e '\033[1;32m✓ Verified READ-WRITE access to 192.168.1.34:/media/alan/home40/Clonezilla!\033[0m'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@131@@
+echo -e '\n\033[1m[2/4] Target Drive Selection\033[0m'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@132@@
+echo -e '\033[2m  ℹ️  Why we ask this: Dynamically scans all physical and virtual disks attached to this machine to prevent cloning or saving the wrong drive.\033[0m'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@134@@
+DISCOVERED_DRIVES=()
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@135@@
+IFS=
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@135@@
+read -r dname
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@139@@
+lsblk -d -n -o NAME,TYPE
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@139@@
+awk '$2=="disk" && $1 !~ /^(nbd|loop|ram|zram)/{print $1}'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@136@@
+'[' -n vda ']'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@136@@
+'[' -b /dev/vda ']'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@137@@
+DISCOVERED_DRIVES+=("/dev/${dname}")
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@135@@
+IFS=
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@135@@
+read -r dname
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@141@@
+'[' 1 -eq 0 ']'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@146@@
+for i in "${!DISCOVERED_DRIVES[@]}"
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@147@@
+dev_path=/dev/vda
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@148@@
+lsblk -d -n -o SIZE /dev/vda
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@148@@
+xargs
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@148@@
+d_size=512M
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@149@@
+lsblk -d -n -o MODEL /dev/vda
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@149@@
+xargs
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@149@@
+d_model=
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@150@@
+lsblk -d -n -o TRAN /dev/vda
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@150@@
+xargs
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@150@@
+d_tran=virtio
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@151@@
+'[' -z '' ']'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@151@@
+d_model='Disk Device'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@152@@
+'[' -n virtio ']'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@152@@
+d_model='Disk Device (virtio)'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@153@@
+echo -e '  \033[1;36m[1]\033[0m /dev/vda (512M, Disk Device (virtio))'
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@156@@
+prompt_choice 'Select drive to backup [1-1]: ' 1 1
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@46@@
+local 'prompt_msg=Select drive to backup [1-1]: '
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@47@@
+local min_val=1
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@48@@
+local max_val=1
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@49@@
+local choice=
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@50@@
+true
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@51@@
+echo -en 'Select drive to backup [1-1]: '
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@52@@
+read -r choice
+@@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@53@@
+echo 1
+@@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@53@@
+xargs
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@53@@
+choice=1
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@54@@
+'[' -z 1 ']'
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@58@@
+[[ 1 =~ ^[0-9]+$ ]]
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@58@@
+'[' 1 -ge 1 ']'
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@58@@
+'[' 1 -le 1 ']'
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@59@@
+echo 1
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@60@@
+return 0
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@156@@
+drive_idx=1
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@157@@
+TARGET_DRIVE=/dev/vda
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@160@@
+basename /dev/vda
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@160@@
+TARGET_BASE=vda
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@161@@
+[[ /dev/vda =~ ^/dev/(sd[b-z]|nvme[1-9]|vd[b-z]) ]]
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@163@@
+declare -f detect_machine_model
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@164@@
+detect_machine_model
+@@@COV@@/scripts/lib/lib_hardware_detect.sh@@96@@
+local model=
+@@@COV@@/scripts/lib/lib_hardware_detect.sh@@97@@
+for p in "/sys/class/dmi/id/product_name" "/sys/devices/virtual/dmi/id/product_name"
+@@@COV@@/scripts/lib/lib_hardware_detect.sh@@98@@
+'[' -f /sys/class/dmi/id/product_name ']'
+@@@@COV@@/scripts/lib/lib_hardware_detect.sh@@99@@
+tr -s ' \t' -
+@@@@COV@@/scripts/lib/lib_hardware_detect.sh@@99@@
+tr -cd '[:alnum:]-_'
+@@@COV@@/scripts/lib/lib_hardware_detect.sh@@99@@
+model=Standard-PC-i440FX--PIIX-1996
+@@@COV@@/scripts/lib/lib_hardware_detect.sh@@100@@
+'[' -n Standard-PC-i440FX--PIIX-1996 ']'
+@@@COV@@/scripts/lib/lib_hardware_detect.sh@@100@@
+'[' Standard-PC-i440FX--PIIX-1996 '!=' None ']'
+@@@COV@@/scripts/lib/lib_hardware_detect.sh@@100@@
+'[' Standard-PC-i440FX--PIIX-1996 '!=' System-Product-Name ']'
+@@@COV@@/scripts/lib/lib_hardware_detect.sh@@101@@
+echo Standard-PC-i440FX--PIIX-1996
+@@@COV@@/scripts/lib/lib_hardware_detect.sh@@102@@
+return 0
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@164@@
+DEFAULT_DRIVE_TAG=Standard-PC-i440FX--PIIX-1996
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@170@@
+echo -e '\n\033[1m[3/4] Partition Backup Scope for /dev/vda\033[0m'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@171@@
+echo -e '\033[2m  ℹ️  Why we ask this: Backing up an entire drive takes longer, whereas backing up specific partitions saves storage and speeds up recovery.\033[0m'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@173@@
+AVAILABLE_PARTS=()
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@174@@
+IFS=
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@174@@
+read -r pname
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@178@@
+lsblk -n -l -o NAME,TYPE /dev/vda
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@178@@
+awk '$2=="part"{print $1}'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@180@@
+echo -e 'Available Partitions on /dev/vda:'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@181@@
+'[' 0 -gt 0 ']'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@201@@
+echo -e '  \033[1;33mNotice: No partition table found on /dev/vda. Backing up raw entire disk.\033[0m'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@202@@
+scope_choice=1
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@205@@
+case "$scope_choice" in
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@207@@
+PARTITIONS_LIST=all
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@258@@
+'[' all = all ']'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@259@@
+SCOPE_TAG=all
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@264@@
+date +%Y-%m-%d-%H%M
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@264@@
+TIMESTAMP=2026-09-07-2033
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@265@@
+DEFAULT_IMAGE_NAME=Standard-PC-i440FX--PIIX-1996-all-2026-09-07-2033-img
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@267@@
+echo -e '\n\033[1mBackup Image Naming\033[0m'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@268@@
+echo -e '\033[2m  ℹ️  Why we ask this: Image names must be unique to avoid overwriting previous snapshots, and spaces are sanitized to underscores for exFAT/SMB compatibility.\033[0m'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@269@@
+echo -en 'Enter image folder name [Press Enter for default: '\''Standard-PC-i440FX--PIIX-1996-all-2026-09-07-2033-img'\'']: '
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@270@@
+read -r user_img_name
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@271@@
+IMAGE_NAME=Standard-PC-i440FX--PIIX-1996-all-2026-09-07-2033-img
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@272@@
+echo Standard-PC-i440FX--PIIX-1996-all-2026-09-07-2033-img
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@272@@
+tr ' ' _
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@272@@
+IMAGE_NAME=Standard-PC-i440FX--PIIX-1996-all-2026-09-07-2033-img
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@273@@
+DEST_DIR=/mnt/backup/Standard-PC-i440FX--PIIX-1996-all-2026-09-07-2033-img
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@276@@
+echo -e '\n\033[1m[4/5] Imaging Engine Selection\033[0m'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@277@@
+echo -e '\033[2m  ℹ️  Why we ask this: Clonezilla'\''s native CLI ('\''ocs-sr'\'') is the battle-tested standard with 15+ years of stability in terminal mode. Rescuezilla'\''s CLI is labeled experimental and may format output differently.\033[0m'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@278@@
+echo -e '  \033[1;36m[1]\033[0m Clonezilla Native Engine (ocs-sr) [Standard, Ultra-Reliable]'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@279@@
+echo -e '  \033[1;36m[2]\033[0m Rescuezilla Python Engine (rescuezillapy)'
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@280@@
+prompt_choice 'Select imaging engine [1-2]: ' 1 2
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@46@@
+local 'prompt_msg=Select imaging engine [1-2]: '
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@47@@
+local min_val=1
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@48@@
+local max_val=2
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@49@@
+local choice=
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@50@@
+true
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@51@@
+echo -en 'Select imaging engine [1-2]: '
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@52@@
+read -r choice
+@@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@53@@
+echo 1
+@@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@53@@
+xargs
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@53@@
+choice=1
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@54@@
+'[' -z 1 ']'
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@58@@
+[[ 1 =~ ^[0-9]+$ ]]
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@58@@
+'[' 1 -ge 1 ']'
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@58@@
+'[' 1 -le 2 ']'
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@59@@
+echo 1
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@60@@
+return 0
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@280@@
+engine_choice=1
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@283@@
+echo -e '\n\033[1m[5/5] Bad Sector & Hardware Rescue Handling\033[0m'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@284@@
+echo -e '\033[2m  ℹ️  Why we ask this: If the source drive has physical degradation (like SanDisk/Crucial SSDs with uncorrectable sectors), standard Partclone aborts immediately to protect data integrity. In Rescue Mode ('\''--rescue'\''), Partclone continues past bad blocks and zeroes unreadable sectors so imaging finishes successfully.\033[0m'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@285@@
+echo -e '  \033[1;36m[1]\033[0m Standard Mode (Strict integrity check; abort if bad sectors are found)'
+@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@286@@
+echo -e '  \033[1;36m[2]\033[0m 🚨 Rescue Mode (--rescue: bypass bad sectors, zero unreadable blocks, continue imaging)'
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@287@@
+prompt_choice 'Select Rescue Mode [1-2, Default 1]: ' 1 2
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@46@@
+local 'prompt_msg=Select Rescue Mode [1-2, Default 1]: '
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@47@@
+local min_val=1
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@48@@
+local max_val=2
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@49@@
+local choice=
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@50@@
+true
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@51@@
+echo -en 'Select Rescue Mode [1-2, Default 1]: '
+@@@COV@@/scripts/run_rescuezilla_backup_cli.sh@@52@@
+read -r choice

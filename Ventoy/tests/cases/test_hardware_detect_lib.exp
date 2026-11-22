@@ -1,0 +1,50 @@
+#!/usr/bin/expect -f
+# ==============================================================================
+# test_hardware_detect_lib.exp
+# Exercises:
+#   Direct execution of lib_hardware_detect.sh helper functions:
+#   1. detect_usb_device
+#   2. detect_data_partition
+#   3. detect_machine_model
+# ==============================================================================
+
+set timeout 10
+send_user "\n=== TEST_CASE: Hardware Abstraction Layer Library Direct Tests ===\n"
+
+spawn bash -c "source /home/alan/ap-devices-and-pcs/devices/setup-usb-boot-keys/Ventoy/lib/lib_hardware_detect.sh && echo 'DEV:' \$(detect_usb_device) && detect_data_partition && echo 'P4:' \$DETECTED_P4_DEV && echo 'FS:' \$DETECTED_P4_FS && echo 'MODEL:' \$(detect_machine_model)"
+
+expect {
+    -re "DEV: (/dev/sd\[a-z\])" {
+        set dev $expect_out(1,string)
+        send_user "\nPASS: detect_usb_device() resolved to: $dev\n"
+    }
+    timeout { exit 1 }
+}
+
+expect {
+    -re "P4: (/dev/sd\[a-z\]4)" {
+        set p4 $expect_out(1,string)
+        send_user "\nPASS: detect_data_partition() resolved to: $p4\n"
+    }
+    timeout { exit 1 }
+}
+
+expect {
+    -re "FS: (ntfs|vfat|fuseblk)" {
+        set fs $expect_out(1,string)
+        send_user "\nPASS: Filesystem driver resolved to: $fs\n"
+    }
+    timeout { exit 1 }
+}
+
+expect {
+    -re "MODEL: (\[A-Za-z0-9_-\]+)" {
+        set model $expect_out(1,string)
+        send_user "\nPASS: detect_machine_model() resolved to: $model\n"
+    }
+    timeout { exit 1 }
+}
+
+expect eof
+send_user "\n=== TEST_CASE COMPLETED SUCCESSFULLY ===\n"
+exit 0

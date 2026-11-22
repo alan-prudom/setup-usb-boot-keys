@@ -10,6 +10,16 @@ DEV="/dev/sdb"
 EXPECTED_UBUNTU_UUID="e0d8ad1a-410b-4245-9192-66d2a16077b9"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Python execution resolver (prefers uv if available)
+PYTHON_CMD="python3"
+if command -v uv >/dev/null 2>&1; then
+    PYTHON_CMD="uv run python"
+elif command -v python3 >/dev/null 2>&1; then
+    PYTHON_CMD="python3"
+elif command -v python >/dev/null 2>&1; then
+    PYTHON_CMD="python"
+fi
+
 echo "======================================================================"
 echo "          VENTOY 2 AUDIT & VERIFICATION TEST SUITE"
 echo "======================================================================"
@@ -54,7 +64,7 @@ fi
 
 # 5. Check ventoy.json Syntax
 echo -n "[TEST] Validating ventoy.json syntax... "
-python3 -m json.tool "${SCRIPT_DIR}/ventoy.json" >/dev/null
+$PYTHON_CMD -m json.tool "${SCRIPT_DIR}/ventoy.json" >/dev/null
 echo "PASS"
 
 # 6. Check Persistence Container Label

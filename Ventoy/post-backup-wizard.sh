@@ -25,7 +25,7 @@ else
     RESET=""
 fi
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
 
 # Strict Yes/No prompt function (rejects empty Return key)
 prompt_yes_no() {
@@ -34,14 +34,20 @@ prompt_yes_no() {
     while true; do
         echo -en "${prompt_msg}"
         read -r answer
-        answer="$(echo "$answer" | tr '[:upper:]' '[:lower:]' | xargs)"
+        answer="${answer#"${answer%%[![:space:]]*}"}"
+        answer="${answer%"${answer##*[![:space:]]}"}"
+        answer="${answer,,}"
         if [ -z "$answer" ]; then
             echo -e "  ${YELLOW}⚠️  Empty input (Return/Enter) rejected. A valid response ('y' or 'n') must be typed.${RESET}"
             continue
         fi
         case "$answer" in
-            y|yes) return 0 ;;
-            n|no)  return 1 ;;
+            y|yes)
+                return 0
+                ;;
+            n|no)
+                return 1
+                ;;
             *)
                 echo -e "  ${RED}⚠️  Invalid input '$answer'. Please type 'y' (yes) or 'n' (no).${RESET}"
                 ;;
@@ -55,29 +61,41 @@ LOG_FILE="${1:-}"
 # Check for latest_backup.env state file
 if [ -f "${SCRIPT_DIR}/latest_backup.env" ]; then
     # shellcheck disable=SC1090
-    source "${SCRIPT_DIR}/latest_backup.env" 2>/dev/null || true
-    if [ -z "$LOG_FILE" ] && [ -n "${LATEST_LOG:-}" ] && [ -f "$LATEST_LOG" ]; then
+    if source "${SCRIPT_DIR}/latest_backup.env" 2>/dev/null; then
+        :
+    fi
+    if [ -z "$LOG_FILE" ] \
+        && [ -n "${LATEST_LOG:-}" ] \
+        && [ -f "$LATEST_LOG" ]; then
         LOG_FILE="$LATEST_LOG"
     fi
 fi
 
 # Check for symlink
-if [ -z "$LOG_FILE" ] || [ ! -f "$LOG_FILE" ]; then
+if [ -z "$LOG_FILE" ] \
+    || [ ! -f "$LOG_FILE" ]; then
     if [ -f "${SCRIPT_DIR}/latest_backup.log" ]; then
         LOG_FILE="${SCRIPT_DIR}/latest_backup.log"
     fi
 fi
 
 # Check for newest backup_*.log in script directory or /media
-if [ -z "$LOG_FILE" ] || [ ! -f "$LOG_FILE" ]; then
-    NEWEST_LOG=$(ls -t "${SCRIPT_DIR}"/backup_*.log /media/*/*/backup_*.log 2>/dev/null | head -n 1 || true)
-    if [ -n "$NEWEST_LOG" ] && [ -f "$NEWEST_LOG" ]; then
+if [ -z "$LOG_FILE" ] \
+    || [ ! -f "$LOG_FILE" ]; then
+    NEWEST_LOG=""
+    local raw_logs
+    if raw_logs=$(ls -t "${SCRIPT_DIR}"/backup_*.log /media/*/*/backup_*.log 2>/dev/null); then
+        NEWEST_LOG=$(head -n 1 <<< "$raw_logs")
+    fi
+    if [ -n "$NEWEST_LOG" ] \
+        && [ -f "$NEWEST_LOG" ]; then
         LOG_FILE="$NEWEST_LOG"
     fi
 fi
 
 # Fallback to system logs
-if [ -z "$LOG_FILE" ] || [ ! -f "$LOG_FILE" ]; then
+if [ -z "$LOG_FILE" ] \
+    || [ ! -f "$LOG_FILE" ]; then
     if [ -f "/tmp/rescuezilla.log" ]; then
         LOG_FILE="/tmp/rescuezilla.log"
     elif [ -f "/var/log/clonezilla.log" ]; then
@@ -93,19 +111,33 @@ status_type="UNKNOWN"
 error_count=0
 warning_count=0
 
-if [ -n "$LOG_FILE" ] && [ -f "$LOG_FILE" ]; then
+if [ -n "$LOG_FILE" ] \
+    && [ -f "$LOG_FILE" ]; then
     has_log=1
     # Filter benign lines that contain 'error' but are not actual backup failures
-    error_count=$(grep -iE "error|failed|fatal|corrupt|abort|read error|input/output error|no space left" "$LOG_FILE" 2>/dev/null \
-        | grep -viE "error_count|0 errors|no error|grub-probe: error: cannot find a GRUB drive|check if udevd rules|img_out_err|dmraid.table" \
-        | wc -l || true)
+    error_count=0
+    if raw_errs=$(grep -iE "error|failed|fatal|corrupt|abort|read error|input/output error|no space left" "$LOG_FILE" 2>/dev/null); then
+        filtered_errs=$(grep -viE "error_count|0 errors|no error|grub-probe: error: cannot find a GRUB drive|check if udevd rules|img_out_err|dmraid.table" <<< "$raw_errs")
+        error_count=$(wc -l <<< "$filtered_errs")
+    fi
 
-    warning_count=$(grep -iE "warning|retry|bad sector" "$LOG_FILE" 2>/dev/null | wc -l || true)
+    warning_count=0
+    if raw_warns=$(grep -iE "warning|retry|bad sector" "$LOG_FILE" 2>/dev/null); then
+        warning_count=$(wc -l <<< "$raw_warns")
+    fi
+
+    rescue_bad_blocks=0
+    if raw_bad=$(grep -iE "Can't read sector at|lost data|unreadable sector" "$LOG_FILE" 2>/dev/null); then
+        rescue_bad_blocks=$(wc -l <<< "$raw_bad")
+    fi
 
     # Check Clonezilla and Rescuezilla completion markers
     if grep -iE "Ending /usr/sbin/ocs-sr|End of saveparts job|End of savedisk job|Finished!|backup completed successfully|restore completed successfully|clone completed successfully|successfully saved|completed with 0 errors" "$LOG_FILE" >/dev/null 2>&1; then
-        if [ "$error_count" -eq 0 ]; then
+        if [ "$error_count" -eq 0 ] \
+            && [ "$rescue_bad_blocks" -eq 0 ]; then
             status_type="SUCCESS"
+        elif [ "$rescue_bad_blocks" -gt 0 ]; then
+            status_type="RESCUE_SUCCESS"
         else
             status_type="SUCCESS_WITH_WARNINGS"
         fi
@@ -117,7 +149,9 @@ if [ -n "$LOG_FILE" ] && [ -f "$LOG_FILE" ]; then
 fi
 
 # 3. Print Header & Assessment
-clear 2>/dev/null || true
+if clear 2>/dev/null; then
+    :
+fi
 echo -e "${CYAN}======================================================================${RESET}"
 echo -e "${BOLD}       🛡️  POST-BACKUP DIAGNOSTIC & LOG EXTRACTION WIZARD           ${RESET}"
 echo -e "${CYAN}======================================================================${RESET}"
@@ -128,6 +162,11 @@ case "$status_type" in
         echo -e "  ${GREEN}██████████████████████████████████████████████████████████████${RESET}"
         echo -e "  ${GREEN}█  🟢 STATUS: BACKUP COMPLETED SUCCESSFULLY (Zero Errors)     █${RESET}"
         echo -e "  ${GREEN}██████████████████████████████████████████████████████████████${RESET}"
+        ;;
+    "RESCUE_SUCCESS")
+        echo -e "  ${YELLOW}██████████████████████████████████████████████████████████████${RESET}"
+        echo -e "  ${YELLOW}█  🟡 STATUS: RESCUE BACKUP COMPLETED (${rescue_bad_blocks} Bad Sectors Zeroed) █${RESET}"
+        echo -e "  ${YELLOW}██████████████████████████████████████████████████████████████${RESET}"
         ;;
     "SUCCESS_WITH_WARNINGS")
         echo -e "  ${YELLOW}██████████████████████████████████████████████████████████████${RESET}"
@@ -158,10 +197,22 @@ if [ -n "${LATEST_TARGET_DRIVE:-}" ]; then
     echo -e "  • Source Drive       : ${CYAN}${LATEST_TARGET_DRIVE}${RESET} (${LATEST_PARTITIONS:-all})"
 fi
 if [ "$has_log" -eq 1 ]; then
-    echo -e "  • Log Size           : $(du -h "$LOG_FILE" 2>/dev/null | awk '{print $1}') ($(wc -l < "$LOG_FILE") lines)"
+    log_size_raw=""
+    if log_size_raw=$(du -h "$LOG_FILE" 2>/dev/null); then
+        # Extract first field (size) — du output is "<size>\t<path>"; strip from first tab onward
+        log_size="${log_size_raw%%$'\t'*}"
+    else
+        log_size="?"
+    fi
+    log_lines=$(wc -l < "$LOG_FILE")
+    log_ts=""
+    if ! log_ts=$(date -r "$LOG_FILE" "+%Y-%m-%d %H:%M:%S" 2>/dev/null); then
+        log_ts="N/A"
+    fi
+    echo -e "  • Log Size           : ${log_size} (${log_lines} lines)"
     echo -e "  • Detected Errors    : ${RED}${error_count}${RESET}"
     echo -e "  • Detected Warnings  : ${YELLOW}${warning_count}${RESET}"
-    echo -e "  • Last Log Timestamp : $(date -r "$LOG_FILE" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "N/A")"
+    echo -e "  • Last Log Timestamp : ${log_ts}"
 else
     echo -e "  • Log Status         : ${RED}Not Found (Live session active or stateless run)${RESET}"
 fi
@@ -181,16 +232,22 @@ create_bundle() {
     if [ -f "${SCRIPT_DIR}/latest_backup.env" ]; then
         cp -v "${SCRIPT_DIR}/latest_backup.env" "${bundle_dir}/"
     fi
-    dmesg -T > "${bundle_dir}/kernel_dmesg.log" 2>/dev/null || true
-    journalctl -b > "${bundle_dir}/system_journal.log" 2>/dev/null || true
-    lsblk -o NAME,SIZE,TYPE,FSTYPE,LABEL,UUID,MOUNTPOINT,MODEL > "${bundle_dir}/block_devices.txt" 2>/dev/null || true
-    fdisk -l > "${bundle_dir}/partition_tables.txt" 2>/dev/null || true
-    df -h > "${bundle_dir}/filesystem_usage.txt" 2>/dev/null || true
+    dmesg -T > "${bundle_dir}/kernel_dmesg.log" 2>/dev/null \
+        || true
+    journalctl -b > "${bundle_dir}/system_journal.log" 2>/dev/null \
+        || true
+    lsblk -o NAME,SIZE,TYPE,FSTYPE,LABEL,UUID,MOUNTPOINT,MODEL > "${bundle_dir}/block_devices.txt" 2>/dev/null \
+        || true
+    fdisk -l > "${bundle_dir}/partition_tables.txt" 2>/dev/null \
+        || true
+    df -h > "${bundle_dir}/filesystem_usage.txt" 2>/dev/null \
+        || true
 
     for disk in /dev/sd[a-z] /dev/nvme[0-9]n[0-9]; do
         if [ -b "$disk" ]; then
             dev_name=$(basename "$disk")
-            smartctl -a "$disk" > "${bundle_dir}/smart_${dev_name}.log" 2>/dev/null || true
+            smartctl -a "$disk" > "${bundle_dir}/smart_${dev_name}.log" 2>/dev/null \
+                || true
         fi
     done
 
@@ -211,16 +268,25 @@ while true; do
     echo -e "  ${CYAN}[8]${RESET} Exit Wizard to Shell"
     echo -en "\n${BOLD}Select an action [1-8]: ${RESET}"
     read -r choice
-    choice="$(echo "$choice" | xargs)"
+    choice="${choice#"${choice%%[![:space:]]*}"}"
+    choice="${choice%"${choice##*[![:space:]]}"}"
 
     case "$choice" in
         1)
             echo -e "\n${BOLD}🔍 Recent Error & Warning Snippets:${RESET}"
             if [ "$has_log" -eq 1 ]; then
                 echo -e "${CYAN}--- Error Matches in $LOG_FILE ---${RESET}"
-                grep -iE "error|failed|fatal|corrupt|abort|read error|input/output error|no space left" "$LOG_FILE" 2>/dev/null \
-                    | grep -viE "error_count|0 errors|no error|grub-probe: error: cannot find a GRUB drive|check if udevd rules|img_out_err|dmraid.table" \
-                    | tail -n 20 || echo "No explicit errors found."
+                local raw_err_matches=""
+                raw_err_matches=$(grep -iE "error|failed|fatal|corrupt|abort|read error|input/output error|no space left" "$LOG_FILE" 2>/dev/null)
+                local filtered_err_matches=""
+                filtered_err_matches=$(grep -viE "error_count|0 errors|no error|grub-probe: error: cannot find a GRUB drive|check if udevd rules|img_out_err|dmraid.table" <<< "$raw_err_matches")
+                local err_matches=""
+                err_matches=$(tail -n 20 <<< "$filtered_err_matches")
+                if [ -n "$err_matches" ]; then
+                    echo "$err_matches"
+                else
+                    echo "No explicit errors found."
+                fi
                 echo -e "${CYAN}----------------------------------${RESET}"
                 echo -e "\n${BOLD}Last 15 lines of log:${RESET}"
                 tail -n 15 "$LOG_FILE"
@@ -242,7 +308,11 @@ while true; do
                 tmp_dir="/tmp/bundle_export_$(date +%Y%m%d_%H%M%S)"
                 create_bundle "$tmp_dir"
                 echo -e "${CYAN}Transmitting bundle over SSH/SCP to ${remote_dest}...${RESET}"
-                scp -r "$tmp_dir"/* "$remote_dest" 2>/dev/null && echo -e "${GREEN}✓ Export complete!${RESET}" || echo -e "${RED}✗ Transfer failed. Verify network connectivity.${RESET}"
+                if scp -r "$tmp_dir"/* "$remote_dest" 2>/dev/null; then
+                    echo -e "${GREEN}✓ Export complete!${RESET}"
+                else
+                    echo -e "${RED}✗ Transfer failed. Verify network connectivity.${RESET}"
+                fi
                 rm -rf "$tmp_dir"
             fi
             ;;
@@ -251,7 +321,11 @@ while true; do
             for d in /dev/sd[a-z] /dev/nvme[0-9]n[0-9]; do
                 if [ -b "$d" ]; then
                     echo -e "\n${CYAN}Disk $d:${RESET}"
-                    smartctl -H "$d" 2>/dev/null || echo "SMART not supported on $d"
+                    if smartctl -H "$d" 2>/dev/null; then
+                        :
+                    else
+                        echo "SMART not supported on $d"
+                    fi
                 fi
             done
             ;;
@@ -259,7 +333,11 @@ while true; do
             if prompt_yes_no "Are you sure you want to reboot the system? (y/n): "; then
                 echo -e "${YELLOW}Rebooting system...${RESET}"
                 sync
-                reboot 2>/dev/null || systemctl reboot || true
+                if ! reboot 2>/dev/null; then
+                    if ! systemctl reboot 2>/dev/null; then
+                        true
+                    fi
+                fi
                 break
             fi
             ;;
@@ -267,7 +345,11 @@ while true; do
             if prompt_yes_no "Are you sure you want to power off the system? (y/n): "; then
                 echo -e "${YELLOW}Shutting down system...${RESET}"
                 sync
-                poweroff 2>/dev/null || systemctl poweroff || true
+                if ! poweroff 2>/dev/null; then
+                    if ! systemctl poweroff 2>/dev/null; then
+                        true
+                    fi
+                fi
                 break
             fi
             ;;
@@ -284,7 +366,10 @@ while true; do
     esac
 done
 
-echo ""
-read -n 1 -s -r -p "Wizard closed. Press any key to close this terminal..."
-echo ""
+if [[ "${1:-}" != *"--no-pause"* ]] \
+    && [[ "${2:-}" != *"--no-pause"* ]]; then
+    echo ""
+    read -n 1 -s -r -p "Wizard closed. Press any key to close this terminal..."
+    echo ""
+fi
 
